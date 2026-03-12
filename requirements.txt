@@ -4,6 +4,6 @@ PyPDF2
 python-docx
 tiktoken
 numpy
-dotenv
-dj_database_url
-psycopg2
+python-dotenv
+dj-database-url
+psycopg2-binary

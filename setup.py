@@ -1,17 +1,12 @@
 from setuptools import setup, find_packages
 
 setup(
-    name='RAG_Document_Retrieval',
-    version='1.0.0',
+    name="RAG_Document_Retrieval",
+    version="1.0.0",
     packages=find_packages(),
     include_package_data=True,
+    license="MIT",
     install_requires=[
-        'django',
-        
+        "django>=4.2",
     ],
-    entry_points={
-        'console_scripts': [
-            'manage.py=manage:main',
-        ],
-    },
 )
