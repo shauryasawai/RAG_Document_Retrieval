@@ -1,5 +1,9 @@
 from pathlib import Path
 import os
+import dj_database_url
+from dotenv import load_dotenv
+
+load_dotenv()
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = '13214224535432132'
@@ -46,25 +50,11 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'project.wsgi.application'
-import os
-import dj_database_url
-from dotenv import load_dotenv
-load_dotenv()
 
 DATABASE_URL = os.getenv("DATABASE_URL")
-
 DATABASES = {
     'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600, ssl_require=False)
 }
-
-##SQL_LITE
-
-# DATABASES = {
-#     'default': {
-#         'ENGINE': 'django.db.backends.sqlite3',
-#         'NAME': BASE_DIR / 'db.sqlite3',
-#     }
-# }
 
 AUTH_PASSWORD_VALIDATORS = []
 LANGUAGE_CODE = 'en-us'
@@ -76,8 +66,22 @@ STATIC_URL = '/static/'
 STATICFILES_DIRS = [BASE_DIR / 'static']
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
-MEDIA_URL = '/media/'
-MEDIA_ROOT = BASE_DIR / 'media'
+# ── File uploads ────────────────────────────────────────────────────────────
+# Vercel's filesystem is read-only except for /tmp.
+# MEDIA_ROOT must point there so Django's upload pipeline never touches
+# /var/task/media/ (which causes the OSError [Errno 30]).
+MEDIA_URL  = '/media/'
+MEDIA_ROOT = '/tmp/media/'
+
+# Tell Django's TemporaryFileUploadHandler to stage uploads in /tmp
+FILE_UPLOAD_TEMP_DIR = '/tmp'
+
+# Keep small files in memory; larger ones go to FILE_UPLOAD_TEMP_DIR
+FILE_UPLOAD_HANDLERS = [
+    'django.core.files.uploadhandler.MemoryFileUploadHandler',
+    'django.core.files.uploadhandler.TemporaryFileUploadHandler',
+]
+# ────────────────────────────────────────────────────────────────────────────
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 LOGIN_URL = '/base/login/'
