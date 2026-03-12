@@ -35,7 +35,7 @@ class Project(models.Model):
 class ReferenceDocument(models.Model):
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='references')
     name = models.CharField(max_length=300)
-    file = models.FileField(upload_to='references/')
+    file = models.FileField(upload_to='references/',blank=True, null=True)
     file_type = models.CharField(max_length=20)
     chunk_count = models.IntegerField(default=0)
     processed = models.BooleanField(default=False)
