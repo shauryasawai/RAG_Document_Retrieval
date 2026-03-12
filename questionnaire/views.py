@@ -352,7 +352,7 @@ def generate_answers_task(project_pk, api_key, question_ids=None, user_pk=None):
     """Background task — generates answers and tracks token usage."""
     try:
         project = Project.objects.get(pk=project_pk)
-
+ 
         if user_pk:
             try:
                 user = User.objects.get(pk=user_pk)
@@ -364,78 +364,102 @@ def generate_answers_task(project_pk, api_key, question_ids=None, user_pk=None):
                     return
             except Exception as e:
                 print(f"Token limit check error: {e}")
-
+ 
         chunks_data = []
         for ref in project.references.filter(processed=True):
             for chunk in ref.chunks.all():
                 emb = chunk.get_embedding()
                 chunks_data.append((chunk.pk, chunk.content, emb, ref.name, chunk.page_number))
-
+ 
         if not chunks_data:
             project.status = 'review'
             project.save()
             return
-
+ 
         questions = project.questions.all()
         if question_ids:
             questions = questions.filter(pk__in=question_ids)
-
+ 
         answered = 0
         total_confidence = 0.0
-
+ 
         for question in questions:
+            # ── per-question token gate ────────────────────────────────────
             if user_pk:
                 try:
                     user = User.objects.get(pk=user_pk)
-                    within_limit, usage = _check_token_limit(user)
+                    within_limit, _ = _check_token_limit(user)
                     if not within_limit:
                         print(f"Token limit hit mid-generation at question {question.pk}. Stopping.")
                         break
                 except Exception:
                     pass
-
-            question.status = 'generating'
-            question.save()
-
-            relevant = rag_engine.retrieve_relevant_chunks(
-                question.text, chunks_data, api_key, top_k=5
-            )
-            result = rag_engine.generate_answer(
-                question.text, relevant, api_key, project.name
-            )
-
-            if user_pk:
+ 
+            # ── wrap each question so one failure never kills the whole batch
+            try:
+                question.status = 'generating'
+                question.save()
+ 
+                relevant = rag_engine.retrieve_relevant_chunks(
+                    question.text, chunks_data, api_key, top_k=8
+                    )
+                result = rag_engine.generate_answer(
+                    question.text, relevant, api_key, project.name
+                )
+ 
+                if user_pk:
+                    try:
+                        usage = _get_or_create_usage(User.objects.get(pk=user_pk))
+                        u = result.get('usage', {})
+                        usage.add_usage(u.get('prompt_tokens', 0), u.get('completion_tokens', 0))
+                    except Exception as e:
+                        print(f"Token tracking error: {e}")
+ 
+                # ── use the returned instance — avoids RelatedObjectDoesNotExist
+                answer_obj, _ = Answer.objects.update_or_create(
+                    question=question,
+                    defaults={
+                        'generated_answer': result['answer'],
+                        'citations':        result['citations'],
+                        'confidence_score': result['confidence'],
+                    }
+                )
+ 
+                chunk_ids = [r[1] for r in relevant if r[0] > 0.3]
+                answer_obj.relevant_chunks.set(
+                    DocumentChunk.objects.filter(pk__in=chunk_ids)
+                )
+ 
+                # Refresh from DB to avoid stale-object overwrite
+                question.refresh_from_db()
+                question.status = 'answered'
+                question.save()
+ 
+                answered += 1
+                total_confidence += result['confidence']
+ 
+            except Exception as e:
+                print(f"Error generating answer for question {question.pk}: {e}")
                 try:
-                    usage = _get_or_create_usage(User.objects.get(pk=user_pk))
-                    u = result.get('usage', {})
-                    usage.add_usage(u.get('prompt_tokens', 0), u.get('completion_tokens', 0))
-                except Exception as e:
-                    print(f"Token tracking error: {e}")
-
-            Answer.objects.update_or_create(
-                question=question,
-                defaults={
-                    'generated_answer': result['answer'],
-                    'citations': result['citations'],
-                    'confidence_score': result['confidence'],
-                }
-            )
-
-            ans = question.answer
-            chunk_ids = [r[1] for r in relevant if r[0] > 0.3]
-            ans.relevant_chunks.set(DocumentChunk.objects.filter(pk__in=chunk_ids))
-
-            question.status = 'answered'
-            question.save()
-            answered += 1
-            total_confidence += result['confidence']
-
+                    question.refresh_from_db()
+                    question.status = 'pending'
+                    question.save()
+                except Exception:
+                    pass
+ 
         project.answered_questions = project.questions.filter(
             status__in=['answered', 'reviewed']
         ).count()
         project.confidence_score = (total_confidence / answered) if answered > 0 else 0
         project.status = 'review'
         project.save()
+ 
+    except Exception as e:
+        print(f"Generation task error: {e}")
+        try:
+            Project.objects.filter(pk=project_pk).update(status='review')
+        except Exception:
+            pass
 
     except Exception as e:
         print(f"Generation task error: {e}")
@@ -444,6 +468,105 @@ def generate_answers_task(project_pk, api_key, question_ids=None, user_pk=None):
         except Exception:
             pass
 
+@login_required
+def question_regenerate(request, pk, qpk):
+    if request.method != 'POST':
+        return JsonResponse({'error': 'POST required'}, status=405)
+
+    project  = get_object_or_404(Project, pk=pk, user=request.user)
+    question = get_object_or_404(Question, pk=qpk, project=project)
+
+    within_limit, usage = _check_token_limit(request.user)
+    if not within_limit:
+        return JsonResponse(
+            {'error': f'Token limit reached ({usage.total_tokens_used:,} / '
+                      f'{usage.max_token_limit:,}). Contact your administrator.'},
+            status=403
+        )
+
+    # Capture primitives only — never pass request/model instances into threads
+    api_key  = get_api_key(request.user)
+    user_pk  = request.user.pk
+    proj_pk  = project.pk
+
+    def _regen():
+        from django.db import connection
+        connection.close()  # force a fresh connection in this thread
+
+        try:
+            # Re-fetch everything inside the thread with a clean DB connection
+            try:
+                _project  = Project.objects.get(pk=proj_pk)
+                _question = Question.objects.get(pk=qpk)
+            except (Project.DoesNotExist, Question.DoesNotExist):
+                return
+
+            chunks_data = []
+            for ref in _project.references.filter(processed=True):
+                for chunk in ref.chunks.all():
+                    emb = chunk.get_embedding()
+                    chunks_data.append(
+                        (chunk.pk, chunk.content, emb, ref.name, chunk.page_number)
+                    )
+
+            if not chunks_data:
+                return
+
+            _question.status = 'generating'
+            _question.save()
+
+            relevant = rag_engine.retrieve_relevant_chunks(
+                _question.text, chunks_data, api_key, top_k=8
+            )
+            result = rag_engine.generate_answer(
+                _question.text, relevant, api_key, _project.name
+            )
+
+            # Track tokens
+            try:
+                u_obj = _get_or_create_usage(User.objects.get(pk=user_pk))
+                u = result.get('usage', {})
+                u_obj.add_usage(u.get('prompt_tokens', 0), u.get('completion_tokens', 0))
+            except Exception as e:
+                print(f"Token tracking error: {e}")
+
+            answer_obj, _ = Answer.objects.update_or_create(
+                question=_question,
+                defaults={
+                    'generated_answer': result['answer'],
+                    'citations':        result['citations'],
+                    'confidence_score': result['confidence'],
+                    'is_edited':        False,
+                    'edited_answer':    '',
+                }
+            )
+
+            chunk_ids = [r[1] for r in relevant if r[0] > 0.3]
+            answer_obj.relevant_chunks.set(
+                DocumentChunk.objects.filter(pk__in=chunk_ids)
+            )
+
+            _question.refresh_from_db()
+            _question.status = 'answered'
+            _question.save()
+
+            _project.answered_questions = _project.questions.filter(
+                status__in=['answered', 'reviewed']
+            ).count()
+            _project.save()
+
+        except Exception as e:
+            print(f"Single-question regen error (q={qpk}): {e}")
+            try:
+                Question.objects.filter(pk=qpk).update(status='pending')
+            except Exception:
+                pass
+        finally:
+            from django.db import connection
+            connection.close()  # clean up thread's connection when done
+
+    threading.Thread(target=_regen, daemon=True).start()
+    return JsonResponse({'status': 'started', 'question_id': qpk})
 
 # ---------------------------------------------------------------------------
 # Review / export / misc

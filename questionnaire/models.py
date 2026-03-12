@@ -101,21 +101,30 @@ class Answer(models.Model):
     
 
 class TokenUsage(models.Model):
+
+    COST_PER_1K_PROMPT = Decimal('0.000150')
+    COST_PER_1K_COMPLETION = Decimal('0.000600')
+
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='token_usage')
     total_tokens_used = models.IntegerField(default=0)
     total_cost_usd = models.DecimalField(max_digits=8, decimal_places=4, default=Decimal('0'))
-    max_token_limit = models.IntegerField(default=500_000)  # 500k tokens default
+    max_token_limit = models.IntegerField(default=500_000)
     last_updated = models.DateTimeField(auto_now=True)
 
     def is_within_limit(self):
         return self.total_tokens_used < self.max_token_limit
 
-    def add_usage(self, prompt_tokens, completion_tokens):
+    def add_usage(self, prompt_tokens: int, completion_tokens: int):
+
+        prompt_tokens = int(prompt_tokens)
+        completion_tokens = int(completion_tokens)
+
         self.total_tokens_used += prompt_tokens + completion_tokens
-        # gpt-4o-mini pricing: $0.15/1M input, $0.60/1M output
-        cost = (prompt_tokens * 0.00000015) + (completion_tokens * 0.0000006)
+
+        cost = (
+            Decimal(prompt_tokens) / Decimal('1000') * self.COST_PER_1K_PROMPT +
+            Decimal(completion_tokens) / Decimal('1000') * self.COST_PER_1K_COMPLETION
+        )
+
         self.total_cost_usd += cost
         self.save()
-
-    def __str__(self):
-        return f"{self.user.username}: {self.total_tokens_used:,} tokens used"

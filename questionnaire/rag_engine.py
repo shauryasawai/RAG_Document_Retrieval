@@ -9,11 +9,11 @@ import PyPDF2
 import docx
 
 # ── Tuning constants ───────────────────────────────────────────────────────
-CHUNK_SIZE        = 350
-CHUNK_OVERLAP     = 50
-RETRIEVAL_TOP_K   = 3
-CONTEXT_CHARS     = 400
-MAX_ANSWER_TOKENS = 350
+CHUNK_SIZE        = 500
+CHUNK_OVERLAP     = 100
+RETRIEVAL_TOP_K   = 6
+CONTEXT_CHARS     = 800
+MAX_ANSWER_TOKENS = 600
 EMBED_BATCH       = 100
 # ──────────────────────────────────────────────────────────────────────────
 
@@ -389,29 +389,53 @@ def retrieve_relevant_chunks(
     api_key: str,
     top_k: int = RETRIEVAL_TOP_K,
 ) -> List[Tuple]:
-    """Return top_k most relevant chunks via cosine similarity."""
-    # get_embeddings returns (list_of_vectors, token_count)
-    # We send one question → embeddings list has exactly one entry → [0][0]
+    """Return top_k most relevant chunks via cosine similarity with keyword fallback."""
     all_embeddings, _ = get_embeddings([question], api_key)
-    q_emb = all_embeddings[0]   # the single question vector
+    q_emb = all_embeddings[0]
 
     scored = []
     for chunk_id, chunk_text, embedding, doc_name, page_num in chunks_with_embeddings:
         if embedding:
             sim = cosine_similarity(q_emb, embedding)
-            scored.append((sim, chunk_id, chunk_text, doc_name, page_num))
+        else:
+            sim = 0.0
+        scored.append((sim, chunk_id, chunk_text, doc_name, page_num))
 
     scored.sort(key=lambda x: -x[0])
-    return scored[:top_k]
+    top = scored[:top_k]
+
+    # If best similarity is very low, also add keyword-matched chunks
+    if not top or top[0][0] < 0.25:
+        keywords = [w.lower() for w in question.split() if len(w) > 4]
+        keyword_scored = []
+        for sim, chunk_id, chunk_text, doc_name, page_num in scored:
+            text_lower = chunk_text.lower()
+            hits = sum(1 for kw in keywords if kw in text_lower)
+            if hits > 0:
+                keyword_scored.append((hits, chunk_id, chunk_text, doc_name, page_num))
+        keyword_scored.sort(key=lambda x: -x[0])
+        # Merge keyword results into top, avoiding duplicates
+        existing_ids = {r[1] for r in top}
+        for hits, chunk_id, chunk_text, doc_name, page_num in keyword_scored[:top_k]:
+            if chunk_id not in existing_ids:
+                top.append((hits / 10.0, chunk_id, chunk_text, doc_name, page_num))
+                existing_ids.add(chunk_id)
+        top = top[:top_k]
+
+    return top
 
 
 # ── Answer generation ──────────────────────────────────────────────────────
 
 _SYSTEM_PROMPT = (
-    "You are a security compliance analyst. "
-    "Answer using ONLY the numbered sources below. "
-    "Add inline citations [Source N] after each claim. "
-    "If info is missing say 'Not specified in documents.' "
+    "You are a security compliance analyst helping complete a security questionnaire. "
+    "Use the numbered sources below as your primary reference and cite them with [Source N]. "
+    "If the sources contain relevant information, use it. "
+    "If the sources only partially address the question, use what is available AND supplement "
+    "with standard security best practices — clearly noting which parts come from the documents "
+    "and which are general best practice. "
+    "Only say 'Not specified in documents' if the topic is completely unrelated to anything "
+    "in the sources AND you cannot provide a reasonable security best-practice answer. "
     "Be concise and professional. "
     "End with exactly: CONFIDENCE: <0-100>"
 )

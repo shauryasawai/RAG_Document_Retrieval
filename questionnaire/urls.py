@@ -14,4 +14,5 @@ urlpatterns = [
     path('project/<int:pk>/ref-status/', views.ref_status, name='ref_status'),
     path('project/<int:pk>/reprocess/', views.reprocess_documents, name='reprocess_documents'),
     path('answer/<int:pk>/update/', views.answer_update, name='answer_update'),
+    path('projects/<int:pk>/question/<int:qpk>/regenerate/', views.question_regenerate, name='question_regenerate'),
 ]

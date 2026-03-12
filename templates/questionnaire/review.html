@@ -195,6 +195,13 @@
     border-left: 4px solid var(--warn);
     background: linear-gradient(135deg, var(--surface) 0%, rgba(255, 179, 71, 0.05) 100%);
   }
+
+  /* Regenerating overlay state */
+  .qa-card.regenerating {
+    border-left: 4px solid var(--accent);
+    opacity: 0.75;
+    pointer-events: none;
+  }
   
   .qa-header {
     display: flex;
@@ -396,6 +403,48 @@
   .edit-indicator.show { 
     display: flex; 
   }
+
+  /* Regenerate button — matches existing btn style */
+  .btn-regenerate {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 1rem;
+    font-size: 0.8rem;
+    font-weight: 600;
+    border-radius: 8px;
+    border: 1px solid rgba(108, 99, 255, 0.35);
+    background: rgba(108, 99, 255, 0.08);
+    color: var(--accent);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+  }
+
+  .btn-regenerate:hover:not(:disabled) {
+    background: rgba(108, 99, 255, 0.18);
+    border-color: var(--accent);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px -4px rgba(108, 99, 255, 0.4);
+  }
+
+  .btn-regenerate:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
+  }
+
+  .btn-regenerate .regen-spinner {
+    display: none;
+    width: 12px;
+    height: 12px;
+    border: 2px solid rgba(108, 99, 255, 0.3);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  .btn-regenerate.loading .regen-spinner { display: inline-block; }
+  .btn-regenerate.loading .regen-icon   { display: none; }
   
   /* Processing state */
   .processing-state {
@@ -632,7 +681,7 @@
             </svg>
           </a>
           <a href="{% url 'project_generate' project.pk %}" class="btn btn-secondary group">
-            <span>🔄 Regenerate</span>
+            <span>🔄 Regenerate All</span>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="spin group-hover:animate-spin">
               <path d="M23 4v6h-6M1 20v-6h6"/>
               <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
@@ -685,21 +734,21 @@
             <span class="q-text">{{ q.text }}</span>
             <div class="q-meta">
               {% if q.status == 'reviewed' %}
-              <span class="badge badge-green">
+              <span class="badge badge-green" id="status-badge-{{ q.pk }}">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <path d="M20 6L9 17l-5-5"/>
                 </svg>
                 Reviewed
               </span>
               {% elif q.status == 'answered' %}
-              <span class="badge badge-orange">
+              <span class="badge badge-orange" id="status-badge-{{ q.pk }}">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <circle cx="12" cy="12" r="10"/>
                 </svg>
                 Needs review
               </span>
               {% else %}
-              <span class="badge badge-gray">
+              <span class="badge badge-gray" id="status-badge-{{ q.pk }}">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor">
                   <circle cx="12" cy="12" r="10"/>
                   <path d="M12 8v4M12 16h.01"/>
@@ -713,7 +762,7 @@
                 {% if q.answer.confidence_score >= 0.7 %}conf-high
                 {% elif q.answer.confidence_score >= 0.4 %}conf-med
                 {% else %}conf-low
-                {% endif %}">
+                {% endif %}" id="conf-badge-{{ q.pk }}">
                 {% widthratio q.answer.confidence_score 1 100 %}%
               </span>
               {% endif %}
@@ -725,7 +774,7 @@
           </div>
           
           <div class="qa-body" id="body-{{ q.pk }}">
-            {% if q.status != 'pending' and q.answer %}
+            {% if q.status != 'pending' and q.has_answer_flag %}
             {% with ans=q.answer %}
             <!-- Citations -->
             {% if ans.citations %}
@@ -734,7 +783,7 @@
                 <span>📚 Sources</span>
                 <span class="text-xs">({{ ans.citations|length }})</span>
               </div>
-              <div class="citation-list">
+              <div class="citation-list" id="citations-{{ q.pk }}">
                 {% for cit in ans.citations %}
                 <div class="citation-chip">
                   <span>📄</span>
@@ -760,9 +809,13 @@
             <div>
               <div class="text-xs uppercase tracking-wider text-muted font-bold mb-2 flex items-center gap-1">
                 <span>✍️ Answer</span>
-                {% if ans.is_edited %}
-                <span class="edit-indicator show">Edited</span>
-                {% endif %}
+                <span class="edit-indicator {% if ans.is_edited %}show{% endif %}" id="indicator-{{ ans.pk }}">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                  Edited
+                </span>
               </div>
               <div
                 class="answer-box"
@@ -784,20 +837,48 @@
                 <button class="btn btn-secondary btn-sm" onclick="resetAnswer({{ ans.pk }})">
                   <span>↺ Reset</span>
                 </button>
+                <!-- Regenerate single question button — FIX: uses q.pk, not question.pk -->
+                <button
+                  class="btn-regenerate"
+                  id="regen-btn-{{ q.pk }}"
+                  data-url="{% url 'question_regenerate' project.pk q.pk %}"
+                  data-qpk="{{ q.pk }}"
+                  data-anspk="{{ ans.pk }}"
+                  title="Re-generate this answer with AI"
+                  onclick="regenerateQuestion(this)"
+                >
+                  <span class="regen-icon">⟳ Regenerate</span>
+                  <span class="regen-spinner"></span>
+                </button>
                 <span class="text-xs text-muted" id="saved-{{ ans.pk }}"></span>
               </div>
             </div>
             {% endwith %}
             
             {% else %}
-            <div class="p-4 text-center">
+            <div class="p-4 text-center" id="no-answer-{{ q.pk }}">
               <p class="text-muted text-sm">Answer not yet generated.</p>
-              <a href="{% url 'project_generate' project.pk %}" class="btn btn-primary btn-sm mt-2 group">
-                <span>Generate now</span>
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="transition-transform group-hover:translate-x-1">
-                  <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
-                </svg>
-              </a>
+              <div style="display:flex; gap:0.8rem; justify-content:center; margin-top:0.8rem; flex-wrap:wrap;">
+                <a href="{% url 'project_generate' project.pk %}" class="btn btn-primary btn-sm group">
+                  <span>Generate all</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="transition-transform group-hover:translate-x-1">
+                    <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                  </svg>
+                </a>
+                <!-- Regenerate single question even when no answer exists yet -->
+                <button
+                  class="btn-regenerate"
+                  id="regen-btn-{{ q.pk }}"
+                  data-url="{% url 'question_regenerate' project.pk q.pk %}"
+                  data-qpk="{{ q.pk }}"
+                  data-anspk=""
+                  title="Generate this answer individually"
+                  onclick="regenerateQuestion(this)"
+                >
+                  <span class="regen-icon">⟳ Generate this</span>
+                  <span class="regen-spinner"></span>
+                </button>
+              </div>
             </div>
             {% endif %}
           </div>
@@ -810,7 +891,7 @@
   </div>
 </div>
 
-<!-- Export Bar (shown when progress > 0) -->
+<!-- Export Bar (shown when progress > 0 and < 100) -->
 {% if project.progress_percent > 0 and project.progress_percent < 100 %}
 <div class="export-bar">
   <div class="export-progress">
@@ -834,179 +915,204 @@
 <script>
 const CSRF = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
 
-// Toggle QA card
+// ── Toggle QA card ────────────────────────────────────────────────────────
 function toggleQA(pk) {
   const body = document.getElementById(`body-${pk}`);
   const chev = document.getElementById(`chev-${pk}`);
   const isOpen = body.classList.contains('open');
-  
   body.classList.toggle('open', !isOpen);
   chev.classList.toggle('open', !isOpen);
-  
-  // Smooth scroll to card if opening
   if (!isOpen) {
     setTimeout(() => {
-      const card = document.getElementById(`qcard-${pk}`);
-      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      document.getElementById(`qcard-${pk}`)?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     }, 100);
   }
 }
 
-// Auto-open first unanswered question
+// Auto-open first unanswered question on load
 document.addEventListener('DOMContentLoaded', () => {
   const firstNeedsReview = document.querySelector('.badge-orange');
   if (firstNeedsReview) {
     const card = firstNeedsReview.closest('.qa-card');
-    const pk = card.id.replace('qcard-','');
-    setTimeout(() => toggleQA(pk), 300);
+    if (card) {
+      const pk = card.id.replace('qcard-', '');
+      setTimeout(() => toggleQA(pk), 300);
+    }
   }
 });
 
-// Track dirty answers
+// ── Dirty tracking ────────────────────────────────────────────────────────
 const dirty = new Set();
 
-function markDirty(pk) { 
-  dirty.add(pk); 
-  const indicator = document.getElementById(`indicator-${pk}`);
-  if (indicator) indicator.classList.add('show');
+function markDirty(pk) {
+  dirty.add(pk);
+  document.getElementById(`indicator-${pk}`)?.classList.add('show');
 }
 
 function handleKeyDown(event, pk) {
-  // Ctrl/Cmd + S to save
   if ((event.ctrlKey || event.metaKey) && event.key === 's') {
     event.preventDefault();
     saveAnswer(pk);
   }
 }
 
-// Save answer
+// ── Save answer ───────────────────────────────────────────────────────────
 async function saveAnswer(pk) {
-  const box = document.getElementById(`ans-${pk}`);
-  const text = box.innerText.trim();
+  const box     = document.getElementById(`ans-${pk}`);
+  const text    = box.innerText.trim();
   const savedEl = document.getElementById(`saved-${pk}`);
-  
+
   if (!text) {
     savedEl.textContent = '⚠️ Answer cannot be empty';
     savedEl.style.color = '#dc2626';
-    setTimeout(() => {
-      savedEl.textContent = '';
-      savedEl.style.color = '';
-    }, 3000);
+    setTimeout(() => { savedEl.textContent = ''; savedEl.style.color = ''; }, 3000);
     return;
   }
-  
+
   savedEl.textContent = '💾 Saving...';
   savedEl.style.color = 'var(--accent)';
-  
+
   try {
     const resp = await fetch(`/answer/${pk}/update/`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-CSRFToken': CSRF
-      },
-      body: JSON.stringify({text})
+      headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+      body: JSON.stringify({ text })
     });
-    
     const data = await resp.json();
-    
+
     if (data.success) {
       savedEl.textContent = '✓ Saved';
       savedEl.style.color = '#059669';
-      setTimeout(() => {
-        savedEl.textContent = '';
-        savedEl.style.color = '';
-      }, 2000);
-      
-      // Update indicator
-      const indicator = document.getElementById(`indicator-${pk}`);
-      if (indicator) indicator.classList.add('show');
-      
+      setTimeout(() => { savedEl.textContent = ''; savedEl.style.color = ''; }, 2000);
+
+      document.getElementById(`indicator-${pk}`)?.classList.add('show');
       dirty.delete(pk);
-      
-      // Update card style
-      const card = document.getElementById(`qcard-${pk}`);
-      if (card) {
-        card.classList.add('reviewed');
-        const badge = card.querySelector('.badge-orange, .badge-gray');
+
+      // Update card visual to "reviewed"
+      const ansBox = document.getElementById(`ans-${pk}`);
+      const qpk    = ansBox?.closest('.qa-card')?.dataset.questionId;
+      if (qpk) {
+        const card  = document.getElementById(`qcard-${qpk}`);
+        const badge = document.getElementById(`status-badge-${qpk}`);
+        if (card)  card.classList.add('reviewed');
         if (badge) {
           badge.className = 'badge badge-green';
           badge.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5"/></svg> Reviewed';
         }
       }
-      
       updateSidebar();
     } else {
       savedEl.textContent = '✗ Error saving';
       savedEl.style.color = '#dc2626';
     }
-  } catch(e) {
+  } catch (e) {
     savedEl.textContent = '✗ Network error';
     savedEl.style.color = '#dc2626';
-    console.error('Save error:', e);
   }
 }
 
-// Reset answer
+// ── Reset answer ──────────────────────────────────────────────────────────
 function resetAnswer(pk) {
   const box = document.getElementById(`ans-${pk}`);
   if (box && confirm('Reset to original answer?')) {
     box.innerText = box.dataset.original;
     dirty.delete(pk);
-    
-    const indicator = document.getElementById(`indicator-${pk}`);
-    if (indicator) indicator.classList.remove('show');
-    
+    document.getElementById(`indicator-${pk}`)?.classList.remove('show');
     const savedEl = document.getElementById(`saved-${pk}`);
     savedEl.textContent = '↺ Reset';
     savedEl.style.color = 'var(--text-muted)';
-    setTimeout(() => {
-      savedEl.textContent = '';
-    }, 2000);
+    setTimeout(() => { savedEl.textContent = ''; }, 2000);
   }
 }
 
-// Update sidebar stats
+// ── Regenerate single question ────────────────────────────────────────────
+async function regenerateQuestion(btn) {
+  const url  = btn.dataset.url;
+  const qpk  = btn.dataset.qpk;
+  const card = document.getElementById(`qcard-${qpk}`);
+
+  // Set loading state
+  btn.disabled = true;
+  btn.classList.add('loading');
+  if (card) card.classList.add('regenerating');
+
+  try {
+    const res  = await fetch(url, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF }
+    });
+    const data = await res.json();
+
+    if (data.error) {
+      alert(data.error);
+      btn.disabled = false;
+      btn.classList.remove('loading');
+      if (card) card.classList.remove('regenerating');
+      return;
+    }
+
+    // Poll the individual question card status via project_status
+    // until this specific question is no longer 'generating'
+    const pollInterval = setInterval(async () => {
+      try {
+        const r = await fetch(`{% url 'project_status' project.pk %}`);
+        const d = await r.json();
+        // When project is back to 'review', this question's regen is done
+        if (d.status === 'review') {
+          clearInterval(pollInterval);
+          // Reload just this card via a full page reload for simplicity
+          // (avoids needing a separate per-question AJAX endpoint for the rendered HTML)
+          location.reload();
+        }
+      } catch (_) { /* network glitch — keep polling */ }
+    }, 1500);
+
+  } catch (e) {
+    alert('Request failed: ' + e);
+    btn.disabled = false;
+    btn.classList.remove('loading');
+    if (card) card.classList.remove('regenerating');
+  }
+}
+
+// ── Sidebar stats ─────────────────────────────────────────────────────────
 function updateSidebar() {
   const reviewed = document.querySelectorAll('.qa-card.reviewed').length;
-  const total = document.querySelectorAll('.qa-card').length;
-  const pct = Math.round((reviewed / total) * 100) || 0;
-  
-  const sidebarPct = document.getElementById('sidebarPct');
-  const sidebarBar = document.getElementById('sidebarBar');
+  const total    = document.querySelectorAll('.qa-card').length;
+  const pct      = Math.round((reviewed / total) * 100) || 0;
+
+  const sidebarPct      = document.getElementById('sidebarPct');
+  const sidebarBar      = document.getElementById('sidebarBar');
   const sidebarReviewed = document.getElementById('sidebarReviewed');
-  
-  if (sidebarPct) sidebarPct.textContent = pct + '%';
-  if (sidebarBar) sidebarBar.style.width = pct + '%';
-  if (sidebarReviewed) sidebarReviewed.textContent = reviewed;
+
+  if (sidebarPct)      sidebarPct.textContent      = pct + '%';
+  if (sidebarBar)      sidebarBar.style.width       = pct + '%';
+  if (sidebarReviewed) sidebarReviewed.textContent  = reviewed;
 }
 
-// Smooth scroll for category links
+// ── Smooth scroll for category links ─────────────────────────────────────
 function smoothScroll(element) {
-  element.preventDefault;
+  element.preventDefault();
   const href = element.getAttribute('href');
   if (href && href.startsWith('#')) {
-    const target = document.querySelector(href);
-    if (target) {
-      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }
+    document.querySelector(href)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }
 }
 
-// Poll generation progress
+// ── Poll generation progress (whole batch) ────────────────────────────────
 {% if project.status == 'processing' %}
 function pollProgress() {
   fetch('{% url "project_status" project.pk %}')
     .then(r => r.json())
     .then(data => {
       const progressEl = document.getElementById('genProgress');
-      const barFill = document.getElementById('genBarFill');
-      const pctEl = document.getElementById('genPct');
-      
+      const barFill    = document.getElementById('genBarFill');
+      const pctEl      = document.getElementById('genPct');
+
       if (progressEl) progressEl.textContent = `${data.answered} of ${data.total} answers generated`;
-      if (barFill) barFill.style.width = data.progress + '%';
-      if (pctEl) pctEl.textContent = data.progress + '%';
-      
+      if (barFill)     barFill.style.width    = data.progress + '%';
+      if (pctEl)       pctEl.textContent      = data.progress + '%';
+
       if (data.status !== 'processing') {
         location.reload();
       } else {
@@ -1017,62 +1123,41 @@ function pollProgress() {
 setTimeout(pollProgress, 2000);
 {% endif %}
 
-// Warn before leaving if unsaved
+// ── Warn before leaving with unsaved changes ──────────────────────────────
 window.onbeforeunload = () => {
-  if (dirty.size > 0) {
-    return 'You have unsaved changes. Are you sure you want to leave?';
-  }
+  if (dirty.size > 0) return 'You have unsaved changes. Are you sure you want to leave?';
 };
 
-// Reprocess documents
+// ── Reprocess documents ───────────────────────────────────────────────────
 async function reprocessDocs() {
   const btn = document.getElementById('reprocessBtn');
   if (!btn) return;
-  
-  const originalText = btn.innerHTML;
+  const originalHTML = btn.innerHTML;
   btn.disabled = true;
   btn.innerHTML = '<span class="spin">⚙️</span> Reprocessing...';
-  
   try {
     const resp = await fetch("{% url 'reprocess_documents' project.pk %}", {
       method: 'POST',
-      headers: {
-        'X-CSRFToken': CSRF
-      }
+      headers: { 'X-CSRFToken': CSRF }
     });
-    
     if (resp.ok) {
       btn.innerHTML = '✓ Processing started';
       btn.classList.add('btn-success');
-      setTimeout(() => {
-        btn.disabled = false;
-        btn.innerHTML = originalText;
-        btn.classList.remove('btn-success');
-      }, 5000);
-    } else {
-      throw new Error('Request failed');
-    }
-  } catch(e) {
-    btn.innerHTML = '⚠️ Error - try again';
+      setTimeout(() => { btn.disabled = false; btn.innerHTML = originalHTML; btn.classList.remove('btn-success'); }, 5000);
+    } else { throw new Error('Request failed'); }
+  } catch (e) {
+    btn.innerHTML = '⚠️ Error — try again';
     btn.classList.add('btn-danger');
-    setTimeout(() => {
-      btn.disabled = false;
-      btn.innerHTML = originalText;
-      btn.classList.remove('btn-danger');
-    }, 3000);
+    setTimeout(() => { btn.disabled = false; btn.innerHTML = originalHTML; btn.classList.remove('btn-danger'); }, 3000);
   }
 }
 
-// Keyboard shortcuts
+// ── Keyboard shortcuts ────────────────────────────────────────────────────
 document.addEventListener('keydown', (e) => {
-  // Escape to close all open cards
   if (e.key === 'Escape') {
     document.querySelectorAll('.qa-body.open').forEach(body => {
       const card = body.closest('.qa-card');
-      if (card) {
-        const pk = card.id.replace('qcard-','');
-        toggleQA(pk);
-      }
+      if (card) toggleQA(card.id.replace('qcard-', ''));
     });
   }
 });
