@@ -16,7 +16,7 @@ SecureLayer Systems is a fictional SaaS company that provides cloud-based infras
 #### - 1 internal reference documents describing policies, infrastructure, and compliance practices.
 
 These documents act as the source of truth used by the system to generate answers.
-A production-ready Django SaaS that uses RAG (Retrieval-Augmented Generation) to automatically answer questionnaires using your reference documents — with full citations.
+A production-ready Django SaaS that uses RAG (Retrieval-Augmented Generation) to automatically answer questionnaires using your reference documents with full citations.
 
 ## Features
 
