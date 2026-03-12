@@ -1,0 +1,1080 @@
+{% extends 'base.html' %}
+{% block title %}Review — {{ project.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  /* Main layout */
+  .review-layout { 
+    display: grid; 
+    grid-template-columns: 280px 1fr; 
+    gap: 2rem; 
+    align-items: start; 
+    padding: 2rem 0 5rem; 
+  }
+  
+  /* Sidebar styling */
+  .sidebar { 
+    position: sticky; 
+    top: 80px; 
+  }
+  
+  .sidebar-card { 
+    background: var(--surface); 
+    border: 2px solid var(--border); 
+    border-radius: 20px; 
+    padding: 1.5rem; 
+    margin-bottom: 1.5rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .sidebar-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+  
+  .sidebar-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px -10px var(--accent);
+  }
+  
+  .sidebar-card:hover::before {
+    opacity: 1;
+  }
+  
+  .sidebar-card h3 { 
+    font-family: 'Syne', sans-serif; 
+    font-size: 1rem; 
+    font-weight: 800; 
+    margin-bottom: 1.2rem;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .sidebar-card h3 svg {
+    width: 18px;
+    height: 18px;
+    color: var(--accent);
+  }
+  
+  /* Category links */
+  .cat-link {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.6rem 1rem;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.2s ease;
+    margin-bottom: 0.3rem;
+    border: 1px solid transparent;
+    font-weight: 500;
+  }
+  
+  .cat-link:hover { 
+    background: var(--surface2); 
+    color: var(--text); 
+    border-color: var(--border);
+    transform: translateX(4px);
+  }
+  
+  .cat-link.active { 
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+    color: white;
+  }
+  
+  .cat-link.active .cat-count {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+  }
+  
+  .cat-count { 
+    font-size: 0.7rem; 
+    background: var(--surface2); 
+    padding: 0.2rem 0.6rem; 
+    border-radius: 30px; 
+    font-weight: 600;
+  }
+  
+  /* Progress section */
+  .progress-section { 
+    margin-bottom: 1.2rem; 
+  }
+  
+  .prog-label { 
+    display: flex; 
+    justify-content: space-between; 
+    font-size: 0.8rem; 
+    color: var(--text-muted); 
+    margin-bottom: 0.4rem; 
+    font-weight: 600;
+  }
+  
+  .stat-mini { 
+    display: flex; 
+    justify-content: space-between; 
+    font-size: 0.9rem; 
+    margin-bottom: 0.5rem;
+    padding: 0.3rem 0;
+    border-bottom: 1px dashed var(--border);
+  }
+  
+  .stat-mini:last-child {
+    border-bottom: none;
+  }
+  
+  .stat-mini .val { 
+    font-weight: 700; 
+    color: var(--text);
+  }
+  
+  /* Question cards */
+  .qa-section { 
+    margin-bottom: 3rem; 
+  }
+  
+  .qa-section-title {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1.1rem;
+    color: var(--text);
+    margin-bottom: 1.2rem;
+    padding-bottom: 0.8rem;
+    border-bottom: 2px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .qa-section-title span {
+    font-size: 0.8rem;
+    background: var(--surface2);
+    padding: 0.2rem 0.8rem;
+    border-radius: 30px;
+    color: var(--text-muted);
+    font-weight: 600;
+  }
+  
+  .qa-card {
+    background: var(--surface);
+    border: 2px solid var(--border);
+    border-radius: 20px;
+    margin-bottom: 1.2rem;
+    overflow: hidden;
+    transition: all 0.3s ease;
+    position: relative;
+  }
+  
+  .qa-card:hover {
+    border-color: var(--accent);
+    transform: translateY(-2px);
+    box-shadow: 0 15px 30px -12px rgba(108, 99, 255, 0.2);
+  }
+  
+  .qa-card.reviewed { 
+    border-left: 4px solid var(--accent3); 
+  }
+  
+  .qa-card.generating { 
+    border-left: 4px solid var(--warn);
+    background: linear-gradient(135deg, var(--surface) 0%, rgba(255, 179, 71, 0.05) 100%);
+  }
+  
+  .qa-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.2rem;
+    padding: 1.2rem 1.5rem;
+    cursor: pointer;
+    user-select: none;
+    transition: background 0.2s ease;
+  }
+  
+  .qa-header:hover { 
+    background: var(--surface2); 
+  }
+  
+  .q-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--accent);
+    background: rgba(108, 99, 255, 0.1);
+    padding: 0.3rem 0.8rem;
+    border-radius: 20px;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+    border: 1px solid rgba(108, 99, 255, 0.2);
+  }
+  
+  .q-text { 
+    font-size: 0.95rem; 
+    font-weight: 500; 
+    flex: 1; 
+    line-height: 1.6; 
+    color: var(--text);
+  }
+  
+  .q-meta { 
+    display: flex; 
+    align-items: center; 
+    gap: 0.8rem; 
+    flex-shrink: 0; 
+  }
+  
+  /* Confidence badges */
+  .conf-badge {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.25rem 0.8rem;
+    border-radius: 30px;
+    border: 1px solid transparent;
+  }
+  
+  .conf-high { 
+    background: rgba(5, 150, 105, 0.15); 
+    color: #059669; 
+    border-color: rgba(5, 150, 105, 0.3);
+  }
+  
+  .conf-med { 
+    background: rgba(217, 119, 6, 0.15); 
+    color: #d97706; 
+    border-color: rgba(217, 119, 6, 0.3);
+  }
+  
+  .conf-low { 
+    background: rgba(220, 38, 38, 0.15); 
+    color: #dc2626; 
+    border-color: rgba(220, 38, 38, 0.3);
+  }
+  
+  .dark .conf-high { color: #00d4aa; }
+  .dark .conf-med { color: #ffb347; }
+  .dark .conf-low { color: #ff6688; }
+  
+  .chevron { 
+    transition: transform 0.3s ease; 
+    color: var(--text-muted);
+    width: 20px;
+    height: 20px;
+  }
+  
+  .chevron.open { 
+    transform: rotate(180deg); 
+    color: var(--accent);
+  }
+  
+  .qa-body { 
+    padding: 0 1.5rem 1.5rem; 
+    border-top: 2px solid var(--border); 
+    display: none; 
+    animation: slideDown 0.3s ease;
+  }
+  
+  .qa-body.open { 
+    display: block; 
+  }
+  
+  @keyframes slideDown {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  /* Answer editor */
+  .answer-box {
+    background: var(--surface2);
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    padding: 1.2rem 1.5rem;
+    font-size: 0.9rem;
+    line-height: 1.7;
+    margin: 1rem 0;
+    min-height: 100px;
+    color: var(--text);
+    outline: none;
+    transition: all 0.2s ease;
+    white-space: pre-wrap;
+  }
+  
+  .answer-box[contenteditable=true]:focus { 
+    border-color: var(--accent); 
+    box-shadow: 0 0 0 4px rgba(108, 99, 255, 0.15);
+    background: var(--surface);
+  }
+  
+  /* Citation styling */
+  .citation-list { 
+    display: flex; 
+    flex-wrap: wrap; 
+    gap: 0.6rem; 
+    margin-bottom: 1.2rem; 
+  }
+  
+  .citation-chip {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.3rem 1rem;
+    background: rgba(108, 99, 255, 0.08);
+    border: 1px solid rgba(108, 99, 255, 0.2);
+    border-radius: 30px;
+    font-size: 0.8rem;
+    color: var(--accent);
+    cursor: pointer;
+    position: relative;
+    font-weight: 500;
+    transition: all 0.2s ease;
+  }
+  
+  .citation-chip:hover { 
+    background: rgba(108, 99, 255, 0.15);
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px -5px var(--accent);
+  }
+  
+  .citation-tooltip {
+    display: none;
+    position: absolute;
+    bottom: 130%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--surface);
+    border: 2px solid var(--border-active);
+    border-radius: 14px;
+    padding: 1rem;
+    font-size: 0.8rem;
+    color: var(--text);
+    width: 300px;
+    z-index: 50;
+    line-height: 1.6;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+  }
+  
+  .citation-chip:hover .citation-tooltip { 
+    display: block; 
+    animation: fadeIn 0.2s ease;
+  }
+  
+  /* Answer actions */
+  .answer-actions { 
+    display: flex; 
+    align-items: center; 
+    gap: 0.8rem; 
+    flex-wrap: wrap;
+  }
+  
+  .edit-indicator { 
+    font-size: 0.75rem; 
+    color: var(--accent3); 
+    display: none;
+    align-items: center;
+    gap: 0.3rem;
+    background: rgba(0, 212, 170, 0.1);
+    padding: 0.2rem 0.8rem;
+    border-radius: 30px;
+    border: 1px solid rgba(0, 212, 170, 0.2);
+  }
+  
+  .edit-indicator.show { 
+    display: flex; 
+  }
+  
+  /* Processing state */
+  .processing-state {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 1.5rem;
+    color: var(--warn);
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  
+  .spinner {
+    width: 20px; 
+    height: 20px;
+    border: 2px solid rgba(255, 179, 71, 0.3);
+    border-top-color: var(--warn);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  
+  /* Processing banner */
+  .processing-banner {
+    background: linear-gradient(135deg, rgba(255, 179, 71, 0.1) 0%, rgba(255, 107, 157, 0.1) 100%);
+    border: 2px solid rgba(255, 179, 71, 0.3);
+    border-radius: 16px;
+    padding: 1.2rem 1.5rem;
+    margin: 1.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .processing-banner::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(135deg, var(--warn), var(--accent2));
+  }
+  
+  /* Export bar */
+  .export-bar {
+    position: fixed;
+    bottom: 0; 
+    left: 0; 
+    right: 0;
+    background: rgba(17, 17, 24, 0.95);
+    backdrop-filter: blur(12px);
+    border-top: 2px solid var(--border);
+    padding: 1rem 2rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    z-index: 100;
+    animation: slideUp 0.3s ease;
+  }
+  
+  .dark .export-bar {
+    background: rgba(10, 10, 15, 0.95);
+  }
+  
+  .export-progress { 
+    display: flex; 
+    align-items: center; 
+    gap: 1.5rem; 
+  }
+  
+  .export-progress .label { 
+    font-size: 0.9rem; 
+    color: var(--text-muted); 
+    font-weight: 600;
+  }
+  
+  .export-progress .count { 
+    font-family: 'Syne', sans-serif; 
+    font-weight: 800; 
+    color: var(--text);
+    font-size: 1.2rem;
+  }
+  
+  .export-bar .w-bar { 
+    width: 180px; 
+  }
+  
+  /* Action buttons in sidebar */
+  .sidebar-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.8rem;
+  }
+  
+  .sidebar-actions .btn {
+    width: 100%;
+    justify-content: center;
+    padding: 0.8rem;
+    font-weight: 600;
+  }
+  
+  /* Responsive */
+  @media (max-width: 1024px) {
+    .review-layout {
+      grid-template-columns: 1fr;
+    }
+    
+    .sidebar {
+      position: static;
+      margin-bottom: 2rem;
+    }
+  }
+  
+  @media (max-width: 640px) {
+    .qa-header {
+      flex-direction: column;
+      gap: 0.8rem;
+    }
+    
+    .q-meta {
+      width: 100%;
+      justify-content: flex-end;
+    }
+    
+    .export-bar {
+      flex-direction: column;
+      gap: 1rem;
+      padding: 1rem;
+    }
+    
+    .export-progress {
+      width: 100%;
+      justify-content: space-between;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <!-- Processing banner -->
+  {% if project.status == 'processing' %}
+  <div class="processing-banner fade-up" id="processingBanner">
+    <div class="spinner" style="flex-shrink:0;"></div>
+    <div style="flex: 1;">
+      <strong style="color: var(--warn); font-size: 1rem;">🤖 AI is generating answers...</strong>
+      <div id="genProgress" class="text-sm text-muted" style="margin-top: 0.2rem;">Starting up...</div>
+    </div>
+    <div style="display:flex; align-items:center; gap:1rem;">
+      <div class="progress-bar w-bar" style="width: 160px;">
+        <div class="progress-fill" id="genBarFill" style="width:0%"></div>
+      </div>
+      <span id="genPct" style="font-size:0.9rem; font-weight:700; color:var(--warn); min-width:45px;">0%</span>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="review-layout">
+    <!-- Sidebar -->
+    <div class="sidebar fade-up">
+      <div class="sidebar-card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <circle cx="12" cy="12" r="10"/>
+            <path d="M12 6v6l4 2"/>
+          </svg>
+          Progress
+        </h3>
+        <div class="progress-section">
+          <div class="prog-label">
+            <span>Answered</span>
+            <span id="sidebarPct">{{ project.progress_percent }}%</span>
+          </div>
+          <div class="progress-bar" style="height:8px;">
+            <div class="progress-fill" id="sidebarBar" style="width:{{ project.progress_percent }}%"></div>
+          </div>
+        </div>
+        <div class="stat-mini">
+          <span class="text-muted">✓ Reviewed</span>
+          <span class="val" id="sidebarReviewed">{{ project.questions_reviewed|default:"0" }}</span>
+        </div>
+        <div class="stat-mini">
+          <span class="text-muted">📊 Avg. Confidence</span>
+          <span class="val" id="sidebarConf">{% widthratio project.confidence_score 1 100 %}%</span>
+        </div>
+        <div class="stat-mini">
+          <span class="text-muted">📝 Total Questions</span>
+          <span class="val">{{ project.total_questions|default:"0" }}</span>
+        </div>
+      </div>
+
+      <div class="sidebar-card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <rect x="2" y="2" width="20" height="20" rx="2.5"/>
+            <path d="M8 2v20M16 2v20M2 8h20M2 16h20"/>
+          </svg>
+          Categories
+        </h3>
+        <div style="max-height: 300px; overflow-y: auto; padding-right: 0.3rem;">
+          {% for cat, qs in categories.items %}
+          <a class="cat-link" href="#cat-{{ forloop.counter }}" onclick="smoothScroll(this)">
+            <span style="display: flex; align-items: center; gap: 0.5rem;">
+              <span>📁</span>
+              {{ cat }}
+            </span>
+            <span class="cat-count">{{ qs|length }}</span>
+          </a>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="sidebar-card">
+        <h3>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M12 5v14M5 12h14"/>
+          </svg>
+          Actions
+        </h3>
+        <div class="sidebar-actions">
+          <a href="{% url 'project_export' project.pk %}?format=docx" class="btn btn-success group">
+            <span>📥 Export DOCX</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="transition-transform group-hover:translate-x-1">
+              <path d="M7 17l5 5 5-5M12 22V2"/>
+            </svg>
+          </a>
+          <a href="{% url 'project_export' project.pk %}?format=json" class="btn btn-secondary group">
+            <span>{ } Export JSON</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="transition-transform group-hover:translate-x-1">
+              <path d="M7 17l5 5 5-5M12 22V2"/>
+            </svg>
+          </a>
+          <a href="{% url 'project_generate' project.pk %}" class="btn btn-secondary group">
+            <span>🔄 Regenerate</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="spin group-hover:animate-spin">
+              <path d="M23 4v6h-6M1 20v-6h6"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+          </a>
+          <button onclick="reprocessDocs()" class="btn btn-secondary group" id="reprocessBtn">
+            <span>⚙️ Reprocess Docs</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M21 2v6h-6M3 22v-6h6"/>
+              <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Q&A -->
+    <div class="fade-up-2">
+      <div class="flex items-center justify-between mb-6">
+        <div>
+          <h1 class="font-display text-2xl font-extrabold">{{ project.name }}</h1>
+          <p class="text-muted text-sm flex items-center gap-2 mt-1">
+            <span>✏️ Review and edit AI-generated answers</span>
+            <span class="badge badge-purple">Auto-save enabled</span>
+          </p>
+        </div>
+        <span class="badge badge-green" style="font-size:0.9rem;">
+          {{ project.answered_questions }}/{{ project.total_questions }} answered
+        </span>
+      </div>
+
+      {% for cat, cat_questions in categories.items %}
+      <div class="qa-section" id="cat-{{ forloop.counter }}">
+        <div class="qa-section-title">
+          <span>{{ cat }}</span>
+          <span>{{ cat_questions|length }} questions</span>
+        </div>
+
+        {% for q in cat_questions %}
+        <div class="qa-card {% if q.status == 'reviewed' %}reviewed{% elif q.status == 'generating' %}generating{% endif %}" id="qcard-{{ q.pk }}" data-question-id="{{ q.pk }}">
+          {% if q.status == 'generating' %}
+          <div class="processing-state">
+            <div class="spinner"></div>
+            <span>Generating answer for Q{{ q.order }}...</span>
+            <span class="text-muted text-xs ml-auto">This may take a few seconds</span>
+          </div>
+          {% else %}
+          <div class="qa-header" onclick="toggleQA({{ q.pk }})">
+            <span class="q-badge">Q{{ q.order }}</span>
+            <span class="q-text">{{ q.text }}</span>
+            <div class="q-meta">
+              {% if q.status == 'reviewed' %}
+              <span class="badge badge-green">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path d="M20 6L9 17l-5-5"/>
+                </svg>
+                Reviewed
+              </span>
+              {% elif q.status == 'answered' %}
+              <span class="badge badge-orange">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <circle cx="12" cy="12" r="10"/>
+                </svg>
+                Needs review
+              </span>
+              {% else %}
+              <span class="badge badge-gray">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <circle cx="12" cy="12" r="10"/>
+                  <path d="M12 8v4M12 16h.01"/>
+                </svg>
+                Pending
+              </span>
+              {% endif %}
+              
+              {% if q.status != 'pending' and q.answer.confidence_score %}
+              <span class="conf-badge 
+                {% if q.answer.confidence_score >= 0.7 %}conf-high
+                {% elif q.answer.confidence_score >= 0.4 %}conf-med
+                {% else %}conf-low
+                {% endif %}">
+                {% widthratio q.answer.confidence_score 1 100 %}%
+              </span>
+              {% endif %}
+              
+              <svg class="chevron" id="chev-{{ q.pk }}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M6 9l6 6 6-6"/>
+              </svg>
+            </div>
+          </div>
+          
+          <div class="qa-body" id="body-{{ q.pk }}">
+            {% if q.status != 'pending' and q.answer %}
+            {% with ans=q.answer %}
+            <!-- Citations -->
+            {% if ans.citations %}
+            <div>
+              <div class="text-xs uppercase tracking-wider text-muted font-bold mb-2 flex items-center gap-1">
+                <span>📚 Sources</span>
+                <span class="text-xs">({{ ans.citations|length }})</span>
+              </div>
+              <div class="citation-list">
+                {% for cit in ans.citations %}
+                <div class="citation-chip">
+                  <span>📄</span>
+                  <span>{{ cit.document|truncatechars:25 }}</span>
+                  {% if cit.page %}<span>· p.{{ cit.page }}</span>{% endif %}
+                  <div class="citation-tooltip">
+                    <strong style="color: var(--accent);">{{ cit.document }}</strong>
+                    {% if cit.page %}<span> — Page {{ cit.page }}</span>{% endif %}
+                    <div class="mt-2 text-xs" style="color: var(--text-muted);">
+                      Relevance: {% widthratio cit.relevance_score 1 100 %}%
+                    </div>
+                    <div class="mt-2 p-2 bg-surface2 rounded-lg text-xs">
+                      <em>"{{ cit.excerpt|truncatechars:180 }}"</em>
+                    </div>
+                  </div>
+                </div>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+            
+            <!-- Answer editor -->
+            <div>
+              <div class="text-xs uppercase tracking-wider text-muted font-bold mb-2 flex items-center gap-1">
+                <span>✍️ Answer</span>
+                {% if ans.is_edited %}
+                <span class="edit-indicator show">Edited</span>
+                {% endif %}
+              </div>
+              <div
+                class="answer-box"
+                contenteditable="true"
+                id="ans-{{ ans.pk }}"
+                data-answer-id="{{ ans.pk }}"
+                data-original="{{ ans.final_answer|escapejs }}"
+                oninput="markDirty({{ ans.pk }})"
+                onkeydown="handleKeyDown(event, {{ ans.pk }})"
+              >{{ ans.final_answer }}</div>
+              
+              <div class="answer-actions">
+                <button class="btn btn-success btn-sm group" onclick="saveAnswer({{ ans.pk }})">
+                  <span>✓ Save</span>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="transition-transform group-hover:translate-x-1">
+                    <path d="M20 6L9 17l-5-5"/>
+                  </svg>
+                </button>
+                <button class="btn btn-secondary btn-sm" onclick="resetAnswer({{ ans.pk }})">
+                  <span>↺ Reset</span>
+                </button>
+                <span class="text-xs text-muted" id="saved-{{ ans.pk }}"></span>
+              </div>
+            </div>
+            {% endwith %}
+            
+            {% else %}
+            <div class="p-4 text-center">
+              <p class="text-muted text-sm">Answer not yet generated.</p>
+              <a href="{% url 'project_generate' project.pk %}" class="btn btn-primary btn-sm mt-2 group">
+                <span>Generate now</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="transition-transform group-hover:translate-x-1">
+                  <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+                </svg>
+              </a>
+            </div>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</div>
+
+<!-- Export Bar (shown when progress > 0) -->
+{% if project.progress_percent > 0 and project.progress_percent < 100 %}
+<div class="export-bar">
+  <div class="export-progress">
+    <span class="label">Export Progress</span>
+    <span class="count">{{ project.answered_questions }}/{{ project.total_questions }}</span>
+    <div class="progress-bar w-bar">
+      <div class="progress-fill" style="width:{{ project.progress_percent }}%"></div>
+    </div>
+  </div>
+  <div class="flex gap-2">
+    <a href="{% url 'project_export' project.pk %}?format=docx" class="btn btn-success btn-sm group">
+      <span>📥 Export DOCX</span>
+    </a>
+    <a href="{% url 'project_export' project.pk %}?format=json" class="btn btn-secondary btn-sm">
+      { } JSON
+    </a>
+  </div>
+</div>
+{% endif %}
+
+<script>
+const CSRF = document.querySelector('[name=csrfmiddlewaretoken]')?.value || '{{ csrf_token }}';
+
+// Toggle QA card
+function toggleQA(pk) {
+  const body = document.getElementById(`body-${pk}`);
+  const chev = document.getElementById(`chev-${pk}`);
+  const isOpen = body.classList.contains('open');
+  
+  body.classList.toggle('open', !isOpen);
+  chev.classList.toggle('open', !isOpen);
+  
+  // Smooth scroll to card if opening
+  if (!isOpen) {
+    setTimeout(() => {
+      const card = document.getElementById(`qcard-${pk}`);
+      card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }, 100);
+  }
+}
+
+// Auto-open first unanswered question
+document.addEventListener('DOMContentLoaded', () => {
+  const firstNeedsReview = document.querySelector('.badge-orange');
+  if (firstNeedsReview) {
+    const card = firstNeedsReview.closest('.qa-card');
+    const pk = card.id.replace('qcard-','');
+    setTimeout(() => toggleQA(pk), 300);
+  }
+});
+
+// Track dirty answers
+const dirty = new Set();
+
+function markDirty(pk) { 
+  dirty.add(pk); 
+  const indicator = document.getElementById(`indicator-${pk}`);
+  if (indicator) indicator.classList.add('show');
+}
+
+function handleKeyDown(event, pk) {
+  // Ctrl/Cmd + S to save
+  if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+    event.preventDefault();
+    saveAnswer(pk);
+  }
+}
+
+// Save answer
+async function saveAnswer(pk) {
+  const box = document.getElementById(`ans-${pk}`);
+  const text = box.innerText.trim();
+  const savedEl = document.getElementById(`saved-${pk}`);
+  
+  if (!text) {
+    savedEl.textContent = '⚠️ Answer cannot be empty';
+    savedEl.style.color = '#dc2626';
+    setTimeout(() => {
+      savedEl.textContent = '';
+      savedEl.style.color = '';
+    }, 3000);
+    return;
+  }
+  
+  savedEl.textContent = '💾 Saving...';
+  savedEl.style.color = 'var(--accent)';
+  
+  try {
+    const resp = await fetch(`/answer/${pk}/update/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': CSRF
+      },
+      body: JSON.stringify({text})
+    });
+    
+    const data = await resp.json();
+    
+    if (data.success) {
+      savedEl.textContent = '✓ Saved';
+      savedEl.style.color = '#059669';
+      setTimeout(() => {
+        savedEl.textContent = '';
+        savedEl.style.color = '';
+      }, 2000);
+      
+      // Update indicator
+      const indicator = document.getElementById(`indicator-${pk}`);
+      if (indicator) indicator.classList.add('show');
+      
+      dirty.delete(pk);
+      
+      // Update card style
+      const card = document.getElementById(`qcard-${pk}`);
+      if (card) {
+        card.classList.add('reviewed');
+        const badge = card.querySelector('.badge-orange, .badge-gray');
+        if (badge) {
+          badge.className = 'badge badge-green';
+          badge.innerHTML = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M20 6L9 17l-5-5"/></svg> Reviewed';
+        }
+      }
+      
+      updateSidebar();
+    } else {
+      savedEl.textContent = '✗ Error saving';
+      savedEl.style.color = '#dc2626';
+    }
+  } catch(e) {
+    savedEl.textContent = '✗ Network error';
+    savedEl.style.color = '#dc2626';
+    console.error('Save error:', e);
+  }
+}
+
+// Reset answer
+function resetAnswer(pk) {
+  const box = document.getElementById(`ans-${pk}`);
+  if (box && confirm('Reset to original answer?')) {
+    box.innerText = box.dataset.original;
+    dirty.delete(pk);
+    
+    const indicator = document.getElementById(`indicator-${pk}`);
+    if (indicator) indicator.classList.remove('show');
+    
+    const savedEl = document.getElementById(`saved-${pk}`);
+    savedEl.textContent = '↺ Reset';
+    savedEl.style.color = 'var(--text-muted)';
+    setTimeout(() => {
+      savedEl.textContent = '';
+    }, 2000);
+  }
+}
+
+// Update sidebar stats
+function updateSidebar() {
+  const reviewed = document.querySelectorAll('.qa-card.reviewed').length;
+  const total = document.querySelectorAll('.qa-card').length;
+  const pct = Math.round((reviewed / total) * 100) || 0;
+  
+  const sidebarPct = document.getElementById('sidebarPct');
+  const sidebarBar = document.getElementById('sidebarBar');
+  const sidebarReviewed = document.getElementById('sidebarReviewed');
+  
+  if (sidebarPct) sidebarPct.textContent = pct + '%';
+  if (sidebarBar) sidebarBar.style.width = pct + '%';
+  if (sidebarReviewed) sidebarReviewed.textContent = reviewed;
+}
+
+// Smooth scroll for category links
+function smoothScroll(element) {
+  element.preventDefault;
+  const href = element.getAttribute('href');
+  if (href && href.startsWith('#')) {
+    const target = document.querySelector(href);
+    if (target) {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+}
+
+// Poll generation progress
+{% if project.status == 'processing' %}
+function pollProgress() {
+  fetch('{% url "project_status" project.pk %}')
+    .then(r => r.json())
+    .then(data => {
+      const progressEl = document.getElementById('genProgress');
+      const barFill = document.getElementById('genBarFill');
+      const pctEl = document.getElementById('genPct');
+      
+      if (progressEl) progressEl.textContent = `${data.answered} of ${data.total} answers generated`;
+      if (barFill) barFill.style.width = data.progress + '%';
+      if (pctEl) pctEl.textContent = data.progress + '%';
+      
+      if (data.status !== 'processing') {
+        location.reload();
+      } else {
+        setTimeout(pollProgress, 2500);
+      }
+    });
+}
+setTimeout(pollProgress, 2000);
+{% endif %}
+
+// Warn before leaving if unsaved
+window.onbeforeunload = () => {
+  if (dirty.size > 0) {
+    return 'You have unsaved changes. Are you sure you want to leave?';
+  }
+};
+
+// Reprocess documents
+async function reprocessDocs() {
+  const btn = document.getElementById('reprocessBtn');
+  if (!btn) return;
+  
+  const originalText = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin">⚙️</span> Reprocessing...';
+  
+  try {
+    const resp = await fetch("{% url 'reprocess_documents' project.pk %}", {
+      method: 'POST',
+      headers: {
+        'X-CSRFToken': CSRF
+      }
+    });
+    
+    if (resp.ok) {
+      btn.innerHTML = '✓ Processing started';
+      btn.classList.add('btn-success');
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
+        btn.classList.remove('btn-success');
+      }, 5000);
+    } else {
+      throw new Error('Request failed');
+    }
+  } catch(e) {
+    btn.innerHTML = '⚠️ Error - try again';
+    btn.classList.add('btn-danger');
+    setTimeout(() => {
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+      btn.classList.remove('btn-danger');
+    }, 3000);
+  }
+}
+
+// Keyboard shortcuts
+document.addEventListener('keydown', (e) => {
+  // Escape to close all open cards
+  if (e.key === 'Escape') {
+    document.querySelectorAll('.qa-body.open').forEach(body => {
+      const card = body.closest('.qa-card');
+      if (card) {
+        const pk = card.id.replace('qcard-','');
+        toggleQA(pk);
+      }
+    });
+  }
+});
+</script>
+{% endblock %}

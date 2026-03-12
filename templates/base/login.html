@@ -1,0 +1,370 @@
+{% extends 'base.html' %}
+{% load static %}
+{% block title %}Sign In — DocuRAG{% endblock %}
+
+{% block extra_head %}
+<!-- Include Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  /* Your existing styles plus Tailwind overrides */
+  .auth-wrap {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  
+  .auth-box {
+    width: 100%;
+    max-width: 420px;
+    z-index: 10;
+  }
+  
+  .auth-logo h1 {
+    font-family: 'Syne', sans-serif;
+    font-size: 2rem;
+    font-weight: 800;
+    margin-bottom: 0.3rem;
+    color: #111827; /* Darker text */
+  }
+  
+  .dark .auth-logo h1 {
+    color: #f9fafb; /* Light text for dark mode */
+  }
+  
+  .auth-logo p {
+    color: #1f2937; /* Darker gray for better readability */
+    font-size: 0.9rem;
+    font-weight: 500;
+  }
+  
+  .dark .auth-logo p {
+    color: #d1d5db;
+  }
+  
+  .auth-card {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(209, 213, 219, 0.8);
+    border-radius: 20px;
+    padding: 2rem;
+    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.2);
+  }
+  
+  .dark .auth-card {
+    background: rgba(17, 24, 39, 0.95);
+    border-color: rgba(75, 85, 99, 0.8);
+  }
+  
+  .auth-footer {
+    text-align: center;
+    margin-top: 1.2rem;
+    font-size: 0.875rem;
+    color: #1f2937; /* Darker text */
+    font-weight: 500;
+  }
+  
+  .dark .auth-footer {
+    color: #9ca3af;
+  }
+  
+  .auth-footer a {
+    color: #2563eb; /* Darker blue */
+    text-decoration: none;
+    font-weight: 600;
+  }
+  
+  .auth-footer a:hover {
+    text-decoration: underline;
+    color: #1d4ed8;
+  }
+  
+  .errorlist {
+    list-style: none;
+    color: #dc2626; /* Darker red */
+    font-size: 0.8rem;
+    margin-top: 0.3rem;
+    padding-left: 0;
+    font-weight: 500;
+  }
+  
+  /* Form styles */
+  .form-group {
+    margin-bottom: 1.5rem;
+  }
+  
+  .form-group label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-weight: 600; /* Bolder labels */
+    font-size: 0.95rem;
+    color: #111827; /* Almost black */
+  }
+  
+  .dark .form-group label {
+    color: #f3f4f6; /* Very light in dark mode */
+  }
+  
+  .form-group input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 2px solid #d1d5db; /* Darker border */
+    border-radius: 12px;
+    font-size: 1rem;
+    font-weight: 500; /* Slightly bolder text */
+    transition: all 0.2s;
+    background: white;
+    color: #111827; /* Dark input text */
+  }
+  
+  .dark .form-group input {
+    background: #1f2937;
+    border-color: #4b5563;
+    color: #f9fafb; /* Light text in dark mode */
+  }
+  
+  .form-group input:focus {
+    outline: none;
+    border-color: #2563eb; /* Darker blue focus */
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.2);
+  }
+  
+  .form-group input::placeholder {
+    color: #6b7280; /* Darker placeholder */
+    font-weight: 400;
+  }
+  
+  .dark .form-group input::placeholder {
+    color: #9ca3af;
+  }
+  
+  .btn-primary {
+    background: #2563eb; /* Darker blue */
+    color: white;
+    border: none;
+    padding: 0.75rem 1.5rem;
+    border-radius: 12px;
+    font-weight: 700; /* Bolder button text */
+    font-size: 1rem;
+    cursor: pointer;
+    transition: all 0.2s;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .btn-primary:hover {
+    background: #1d4ed8; /* Even darker on hover */
+    transform: translateY(-1px);
+    box-shadow: 0 10px 20px -10px #2563eb;
+  }
+  
+  .btn-primary:active {
+    transform: translateY(0);
+  }
+  
+  .alert-error {
+    background: #fee2e2;
+    border: 2px solid #fecaca;
+    color: #991b1b; /* Darker red text */
+    padding: 0.75rem 1rem;
+    border-radius: 12px;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+  }
+  
+  .dark .alert-error {
+    background: #451a1a;
+    border-color: #7f1d1d;
+    color: #fecaca;
+  }
+  
+  /* Animation */
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .fade-up {
+    animation: fade-up 0.6s ease-out forwards;
+  }
+  
+  /* Aurora effect styles */
+  .aurora-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    pointer-events: none;
+  }
+  
+  .aurora-effect {
+    position: absolute;
+    inset: -10px;
+    opacity: 0.4; /* Reduced opacity for better text contrast */
+    background-image: 
+      repeating-linear-gradient(100deg, 
+        transparent 0%,
+        transparent 7%,
+        rgba(255, 255, 255, 0.1) 10%,
+        rgba(255, 255, 255, 0.1) 12%,
+        transparent 16%
+      ),
+      repeating-linear-gradient(100deg, 
+        #2563eb 10%, 
+        #7c3aed 15%, 
+        #db2777 20%, 
+        #4f46e5 25%, 
+        #9333ea 30%
+      );
+    background-size: 300% 200%, 200% 100%;
+    background-position: 50% 50%;
+    filter: blur(10px);
+    animation: aurora 60s linear infinite;
+    mix-blend-mode: screen;
+  }
+  
+  .dark .aurora-effect {
+    opacity: 0.3;
+    background-image: 
+      repeating-linear-gradient(100deg, 
+        #000 0%,
+        #000 7%,
+        rgba(0, 0, 0, 0.5) 10%,
+        rgba(0, 0, 0, 0.5) 12%,
+        #000 16%
+      ),
+      repeating-linear-gradient(100deg, 
+        #2563eb 10%, 
+        #7c3aed 15%, 
+        #db2777 20%, 
+        #4f46e5 25%, 
+        #9333ea 30%
+      );
+    mix-blend-mode: overlay;
+  }
+  
+  @keyframes aurora {
+    0% {
+      background-position: 50% 50%, 50% 50%;
+    }
+    100% {
+      background-position: 350% 50%, 350% 50%;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Aurora Background Container -->
+<div class="aurora-container">
+  <div class="aurora-effect"></div>
+  <div class="absolute inset-0 bg-gradient-to-b from-white/30 via-transparent to-white/20 dark:from-zinc-900/30 dark:via-transparent dark:to-zinc-900/20"></div>
+</div>
+
+<!-- Sign In Form -->
+<div class="auth-wrap relative z-10">
+  <div class="auth-box fade-up">
+    <div class="auth-logo text-center">
+      <h1 class="text-4xl font-bold mb-2">Welcome back</h1>
+      <p class="text-gray-100/90 font-medium">
+        Sign in to your DocuRAG workspace
+      </p>
+    </div>
+    
+    <div class="auth-card">
+      <form method="post">
+        {% csrf_token %}
+        
+        <div class="form-group">
+          <label for="username" class="block text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">
+            Username
+          </label>
+          <input 
+            type="text" 
+            name="username" 
+            id="username"
+            placeholder="your username" 
+            autofocus
+            class="w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium focus:border-blue-700 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all duration-200"
+          >
+          {% if form.username.errors %}
+            <ul class="errorlist mt-2">
+              {% for e in form.username.errors %}
+                <li class="text-sm font-semibold text-red-700 dark:text-red-400">{{ e }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+        
+        <div class="form-group">
+          <label for="password" class="block text-sm font-bold text-gray-900 dark:text-gray-100 mb-2">
+            Password
+          </label>
+          <input 
+            type="password" 
+            name="password" 
+            id="password"
+            placeholder="••••••••"
+            class="w-full px-4 py-3 rounded-xl border-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white font-medium focus:border-blue-700 focus:ring-2 focus:ring-blue-200 dark:focus:ring-blue-800 transition-all duration-200"
+          >
+          {% if form.password.errors %}
+            <ul class="errorlist mt-2">
+              {% for e in form.password.errors %}
+                <li class="text-sm font-semibold text-red-700 dark:text-red-400">{{ e }}</li>
+              {% endfor %}
+            </ul>
+          {% endif %}
+        </div>
+        
+        {% if form.non_field_errors %}
+          <div class="alert-error mb-4 p-3 rounded-xl bg-red-100 dark:bg-red-900/30 border-2 border-red-300 dark:border-red-800">
+            <p class="text-sm font-bold text-red-800 dark:text-red-400">{{ form.non_field_errors.0 }}</p>
+          </div>
+        {% endif %}
+        
+        <button type="submit" class="btn-primary mt-6 group relative overflow-hidden font-bold text-white">
+          <span class="relative z-10 flex items-center justify-center gap-2">
+            Sign in
+            <svg class="w-5 h-5 transition-transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+            </svg>
+          </span>
+        </button>
+      </form>
+    </div>
+    
+    <div class="auth-footer text-center mt-6">
+      <p class="text-sm font-semibold text-gray-800 dark:text-gray-300">
+        Don't have an account? 
+        <a href="{% url 'register' %}" class="text-blue-700 dark:text-blue-400 font-bold hover:underline">
+          Create one free
+        </a>
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Dark mode handling
+  if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+    document.documentElement.classList.add('dark');
+  } else {
+    document.documentElement.classList.remove('dark');
+  }
+</script>
+{% endblock %}

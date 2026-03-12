@@ -1,0 +1,692 @@
+{% extends 'base.html' %}
+{% block title %}{{ project.name }} — Setup{% endblock %}
+
+{% block extra_head %}
+<style>
+  .page-header { 
+    padding: 2rem 0 1.5rem; 
+    border-bottom: 2px solid var(--border); 
+    margin-bottom: 2rem; 
+    position: relative;
+  }
+  
+  .page-header::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 100px;
+    height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    border-radius: 2px;
+  }
+  
+  .page-header h1 { 
+    font-family: 'Syne', sans-serif; 
+    font-size: 2rem; 
+    font-weight: 800; 
+    margin-top: 0.5rem;
+    background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  /* Steps indicator */
+  .steps { 
+    display: flex; 
+    align-items: center;
+    gap: 0.5rem; 
+    margin-bottom: 3rem; 
+    background: var(--surface);
+    padding: 1rem 1.5rem;
+    border-radius: 60px;
+    border: 2px solid var(--border);
+    flex-wrap: wrap;
+  }
+  
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    padding: 0.5rem 1rem 0.5rem 0.5rem;
+    border-radius: 40px;
+    transition: all 0.3s ease;
+    font-weight: 600;
+  }
+  
+  .step.active { 
+    color: var(--text);
+    background: linear-gradient(135deg, rgba(108, 99, 255, 0.1) 0%, rgba(255, 107, 157, 0.1) 100%);
+  }
+  
+  .step.done { 
+    color: var(--accent3); 
+  }
+  
+  .step-num {
+    width: 32px; 
+    height: 32px;
+    border-radius: 50%;
+    background: var(--surface2);
+    border: 2px solid var(--border-active);
+    display: flex; 
+    align-items: center; 
+    justify-content: center;
+    font-size: 0.8rem; 
+    font-weight: 700;
+    flex-shrink: 0;
+    transition: all 0.3s ease;
+  }
+  
+  .step.active .step-num { 
+    background: linear-gradient(135deg, var(--accent), var(--accent2)); 
+    border-color: transparent; 
+    color: white; 
+  }
+  
+  .step.done .step-num { 
+    background: var(--accent3); 
+    border-color: var(--accent3); 
+    color: white; 
+  }
+  
+  .step-arrow { 
+    color: var(--border-active); 
+    font-size: 1.2rem;
+    font-weight: 300;
+  }
+  
+  /* Two column layout */
+  .two-col { 
+    display: grid; 
+    grid-template-columns: 1fr 1fr; 
+    gap: 2rem; 
+  }
+  
+  /* Upload zone */
+  .upload-zone {
+    border: 2px dashed var(--border-active);
+    border-radius: 24px;
+    padding: 3rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    position: relative;
+    background: var(--surface2);
+  }
+  
+  .upload-zone:hover, .upload-zone.drag-over {
+    border-color: var(--accent);
+    background: linear-gradient(135deg, rgba(108, 99, 255, 0.05) 0%, rgba(255, 107, 157, 0.05) 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 25px -5px var(--accent);
+  }
+  
+  .upload-zone input[type=file] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+    width: 100%;
+    height: 100%;
+  }
+  
+  .upload-icon { 
+    font-size: 3rem; 
+    margin-bottom: 1rem;
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-5px); }
+  }
+  
+  .upload-label { 
+    font-weight: 700; 
+    margin-bottom: 0.5rem;
+    font-size: 1.1rem;
+    color: var(--text);
+  }
+  
+  .upload-hint { 
+    font-size: 0.8rem; 
+    color: var(--text-muted); 
+    font-weight: 500;
+  }
+  
+  /* File list */
+  .file-list { 
+    list-style: none; 
+    margin-top: 1rem; 
+    max-height: 300px;
+    overflow-y: auto;
+    padding-right: 0.5rem;
+  }
+  
+  .file-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.8rem 1rem;
+    background: var(--surface2);
+    border-radius: 14px;
+    font-size: 0.85rem;
+    margin-bottom: 0.6rem;
+    border: 1px solid var(--border);
+    transition: all 0.2s ease;
+  }
+  
+  .file-item:hover {
+    border-color: var(--accent);
+    transform: translateX(4px);
+  }
+  
+  .file-item .fname { 
+    color: var(--text); 
+    font-weight: 600; 
+    max-width: 200px; 
+    overflow: hidden; 
+    text-overflow: ellipsis; 
+    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  
+  .file-item .fname::before {
+    content: '📄';
+    font-size: 1rem;
+  }
+  
+  /* Question list */
+  .q-list { 
+    list-style: none; 
+    max-height: 350px; 
+    overflow-y: auto; 
+    padding-right: 0.5rem;
+  }
+  
+  .q-list::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .q-list::-webkit-scrollbar-track {
+    background: var(--surface2);
+    border-radius: 3px;
+  }
+  
+  .q-list::-webkit-scrollbar-thumb {
+    background: var(--border-active);
+    border-radius: 3px;
+  }
+  
+  .q-list::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+  }
+  
+  .q-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 1rem;
+    padding: 0.8rem;
+    border-bottom: 1px solid var(--border);
+    font-size: 0.85rem;
+    transition: all 0.2s ease;
+    border-radius: 12px;
+  }
+  
+  .q-item:hover {
+    background: var(--surface2);
+  }
+  
+  .q-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    color: var(--accent);
+    background: rgba(108, 99, 255, 0.1);
+    padding: 0.25rem 0.7rem;
+    border-radius: 20px;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+    border: 1px solid rgba(108, 99, 255, 0.2);
+    font-weight: 600;
+  }
+  
+  .q-category {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    background: var(--surface2);
+    padding: 0.2rem 0.6rem;
+    border-radius: 20px;
+    display: inline-block;
+    margin-top: 0.3rem;
+    border: 1px solid var(--border);
+  }
+  
+  /* Processing status */
+  .proc-status {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  
+  .proc-dot {
+    width: 10px; 
+    height: 10px;
+    border-radius: 50%;
+    background: var(--warn);
+    box-shadow: 0 0 10px var(--warn);
+  }
+  
+  .proc-dot.done { 
+    background: var(--accent3); 
+    box-shadow: 0 0 10px var(--accent3);
+  }
+  
+  .proc-dot.pulse {
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+  
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.2); }
+  }
+  
+  /* Ready card */
+  .ready-card {
+    background: linear-gradient(135deg, rgba(108, 99, 255, 0.1) 0%, rgba(255, 107, 157, 0.1) 100%);
+    border: 2px solid var(--accent);
+    border-radius: 20px;
+    padding: 1.8rem;
+    margin-top: 2rem;
+    position: relative;
+    overflow: hidden;
+    animation: glow 2s ease-in-out infinite;
+  }
+  
+  @keyframes glow {
+    0%, 100% { box-shadow: 0 0 20px -10px var(--accent); }
+    50% { box-shadow: 0 0 30px -5px var(--accent); }
+  }
+  
+  .ready-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3));
+  }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .two-col {
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+    
+    .steps {
+      border-radius: 20px;
+      padding: 1rem;
+    }
+    
+    .step {
+      width: 100%;
+    }
+    
+    .step-arrow {
+      display: none;
+    }
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container" style="padding-bottom:4rem;">
+  <!-- Header -->
+  <div class="page-header fade-up">
+    <div class="flex items-center justify-between flex-wrap gap-4">
+      <div>
+        <a href="{% url 'dashboard' %}" class="text-muted hover:text-accent transition-colors flex items-center gap-1 text-sm font-medium">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+          </svg>
+          Back to Dashboard
+        </a>
+        <h1 class="font-display">{{ project.name }}</h1>
+        <p class="text-muted text-sm mt-1">Configure your project and upload reference documents</p>
+      </div>
+      {% if questions and references %}
+      <a href="{% url 'project_generate' project.pk %}" class="btn btn-primary btn-lg group">
+        <span>Generate Answers</span>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="transition-transform group-hover:translate-x-1">
+          <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+        </svg>
+      </a>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Steps -->
+  <div class="steps fade-up-2">
+    <div class="step {% if project.questionnaire_file %}done{% else %}active{% endif %}">
+      <div class="step-num">
+        {% if project.questionnaire_file %}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <path d="M20 6L9 17l-5-5"/>
+        </svg>
+        {% else %}1{% endif %}
+      </div>
+      <span>Upload Questionnaire</span>
+    </div>
+    <span class="step-arrow">›</span>
+    
+    <div class="step {% if references %}done{% elif project.questionnaire_file %}active{% endif %}">
+      <div class="step-num">
+        {% if references %}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+          <path d="M20 6L9 17l-5-5"/>
+        </svg>
+        {% else %}2{% endif %}
+      </div>
+      <span>Add Reference Docs</span>
+    </div>
+    <span class="step-arrow">›</span>
+    
+    <div class="step {% if questions and references %}active{% endif %}">
+      <div class="step-num">3</div>
+      <span>Generate & Review</span>
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="two-col fade-up-3">
+    <!-- Left: Questionnaire Section -->
+    <div class="space-y-4">
+      <!-- Questionnaire Card -->
+      <div class="card">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">📋</span>
+          <h3 class="font-display font-bold text-lg">Questionnaire File</h3>
+        </div>
+        
+        {% if project.questionnaire_file %}
+        <div class="bg-surface2 rounded-xl p-4 mb-4 flex items-center gap-3 border border-border">
+          <span class="text-2xl">📄</span>
+          <div class="flex-1 min-w-0">
+            <div class="font-medium truncate">{{ project.questionnaire_file.name }}</div>
+            <div class="text-xs text-muted mt-1">Uploaded {{ project.uploaded_at|timesince }} ago</div>
+          </div>
+          <span class="badge badge-green">{{ project.total_questions }} questions</span>
+        </div>
+        {% endif %}
+        
+        <form method="post" enctype="multipart/form-data" id="questionnaireForm">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="upload_questionnaire">
+          <div class="upload-zone" id="qzone">
+            <input type="file" name="questionnaire" accept=".pdf,.docx,.doc,.txt" onchange="this.closest('form').submit()">
+            <div class="upload-icon">📝</div>
+            <div class="upload-label">
+              {% if project.questionnaire_file %}Replace questionnaire{% else %}Upload questionnaire{% endif %}
+            </div>
+            <div class="upload-hint">PDF, DOCX, or TXT • Questions are auto-extracted</div>
+          </div>
+        </form>
+      </div>
+
+      <!-- Manual Question Card -->
+      <div class="card">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">➕</span>
+          <h3 class="font-display font-bold text-lg">Add Question Manually</h3>
+        </div>
+        <form method="post">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="add_question_manual">
+          <div class="flex gap-2">
+            <input 
+              type="text" 
+              name="question_text" 
+              placeholder="Type a question..." 
+              class="flex-1"
+              required
+            >
+            <button type="submit" class="btn btn-secondary group">
+              <span>Add</span>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M12 5v14M5 12h14"/>
+              </svg>
+            </button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Questions List -->
+      {% if questions %}
+      <div class="card">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">❓</span>
+            <h3 class="font-display font-bold text-lg">Questions ({{ questions.count }})</h3>
+          </div>
+          <span class="badge badge-purple">{{ questions.count }} total</span>
+        </div>
+        <ul class="q-list">
+          {% for q in questions %}
+          <li class="q-item">
+            <span class="q-num">Q{{ q.order }}</span>
+            <div class="flex-1">
+              <div class="font-medium">{{ q.text }}</div>
+              {% if q.category %}
+              <span class="q-category">{{ q.category }}</span>
+              {% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Right: Reference Documents Section -->
+    <div class="space-y-4">
+      <!-- Upload References Card -->
+      <div class="card">
+        <div class="flex items-center gap-2 mb-4">
+          <span class="text-2xl">📚</span>
+          <h3 class="font-display font-bold text-lg">Reference Documents</h3>
+        </div>
+        
+        <form method="post" enctype="multipart/form-data" id="refForm">
+          {% csrf_token %}
+          <input type="hidden" name="action" value="upload_reference">
+          <div class="upload-zone" id="refzone">
+            <input type="file" name="references" accept=".pdf,.docx,.doc,.txt" multiple id="refInput">
+            <div class="upload-icon">📂</div>
+            <div class="upload-label">Upload reference documents</div>
+            <div class="upload-hint">PDF, DOCX, TXT • Multiple files supported</div>
+          </div>
+        </form>
+        
+        <p class="text-xs text-muted mt-3 flex items-center gap-1">
+          <span>💡</span>
+          Company policies, technical specs, handbooks — anything the AI should reference.
+        </p>
+      </div>
+
+      <!-- Uploaded Documents List -->
+      {% if references %}
+      <div class="card">
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <span class="text-2xl">📄</span>
+            <h3 class="font-display font-bold text-lg">Uploaded Documents</h3>
+          </div>
+          <span class="badge badge-green">{{ references.count }} files</span>
+        </div>
+        
+        <ul class="file-list" id="refList">
+          {% for ref in references %}
+          <li class="file-item" data-ref-id="{{ ref.pk }}">
+            <span class="fname">{{ ref.name }}</span>
+            <div class="proc-status">
+              {% if ref.processed %}
+              <div class="proc-dot done"></div>
+              <span class="text-accent3 font-semibold">{{ ref.chunk_count }} chunks</span>
+              {% else %}
+              <div class="proc-dot pulse"></div>
+              <span class="text-warn font-semibold">Processing...</span>
+              {% endif %}
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
+      <!-- Ready to Generate Card -->
+      {% if questions and references %}
+      <div class="ready-card">
+        <div class="flex items-start gap-4">
+          <div class="text-4xl">✨</div>
+          <div class="flex-1">
+            <h4 class="font-display font-bold text-xl mb-2">Ready to generate!</h4>
+            <p class="text-muted text-sm mb-4">
+              {{ questions.count }} questions · {{ references.count }} reference document(s)
+            </p>
+            <a href="{% url 'project_generate' project.pk %}" class="btn btn-primary btn-lg group">
+              <span>🤖 Generate AI Answers</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="transition-transform group-hover:translate-x-1">
+                <path d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+              </svg>
+            </a>
+          </div>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- JavaScript -->
+<script>
+// Auto-submit ref form when files selected
+document.getElementById('refInput')?.addEventListener('change', function() {
+  if (this.files.length > 0) {
+    const form = document.getElementById('refForm');
+    const btn = document.createElement('button');
+    btn.type = 'submit';
+    btn.style.display = 'none';
+    form.appendChild(btn);
+    btn.click();
+  }
+});
+
+// Drag and drop highlighting
+['refzone', 'qzone'].forEach(zoneId => {
+  const zone = document.getElementById(zoneId);
+  if (zone) {
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+      zone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      });
+    });
+    
+    ['dragenter', 'dragover'].forEach(eventName => {
+      zone.addEventListener(eventName, () => {
+        zone.classList.add('drag-over');
+      });
+    });
+    
+    ['dragleave', 'drop'].forEach(eventName => {
+      zone.addEventListener(eventName, () => {
+        zone.classList.remove('drag-over');
+      });
+    });
+  }
+});
+
+// Poll for reference processing status
+{% if references %}
+function pollRefStatus() {
+  fetch('{% url "ref_status" project.pk %}')
+    .then(r => r.json())
+    .then(data => {
+      let allDone = true;
+      data.refs.forEach(ref => {
+        const el = document.querySelector(`[data-ref-id="${ref.id}"] .proc-status`);
+        if (el) {
+          if (ref.processed) {
+            el.innerHTML = `
+              <div class="proc-dot done"></div>
+              <span class="text-accent3 font-semibold">${ref.chunks} chunks</span>
+            `;
+          } else {
+            allDone = false;
+          }
+        }
+      });
+      if (!allDone) setTimeout(pollRefStatus, 2000);
+    })
+    .catch(() => setTimeout(pollRefStatus, 3000));
+}
+setTimeout(pollRefStatus, 2000);
+{% endif %}
+
+// Form validation
+document.getElementById('questionnaireForm')?.addEventListener('submit', function(e) {
+  const fileInput = this.querySelector('input[type="file"]');
+  if (fileInput && fileInput.files.length > 0) {
+    const btn = this.querySelector('button[type="submit"]');
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spin">⏳</span> Uploading...';
+    }
+  }
+});
+
+// Manual question validation
+document.querySelectorAll('form[action*="add_question_manual"]').forEach(form => {
+  form.addEventListener('submit', function(e) {
+    const input = this.querySelector('input[name="question_text"]');
+    if (input && !input.value.trim()) {
+      e.preventDefault();
+      alert('Please enter a question');
+    }
+  });
+});
+</script>
+
+<!-- Additional animations -->
+<style>
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.file-item {
+  animation: slideIn 0.3s ease forwards;
+}
+
+.file-item:nth-child(1) { animation-delay: 0.1s; }
+.file-item:nth-child(2) { animation-delay: 0.15s; }
+.file-item:nth-child(3) { animation-delay: 0.2s; }
+.file-item:nth-child(4) { animation-delay: 0.25s; }
+.file-item:nth-child(5) { animation-delay: 0.3s; }
+</style>
+{% endblock %}

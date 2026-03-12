@@ -1,0 +1,597 @@
+{% extends 'base.html' %}
+{% block title %}Generate Answers — {{ project.name }}{% endblock %}
+
+{% block extra_head %}
+<style>
+  .gen-wrap { 
+    max-width: 800px; 
+    margin: 0 auto; 
+    padding: 3rem 1rem; 
+  }
+  
+  .gen-card { 
+    background: var(--surface); 
+    border: 2px solid var(--border); 
+    border-radius: 28px; 
+    padding: 2.5rem; 
+    text-align: center;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    position: relative;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  
+  .gen-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2), var(--accent3));
+    border-radius: 4px 4px 0 0;
+  }
+  
+  .gen-card:hover {
+    border-color: var(--accent);
+    box-shadow: 0 30px 60px -15px var(--accent);
+  }
+  
+  .gen-icon { 
+    font-size: 4rem; 
+    margin-bottom: 1.5rem;
+    animation: float 3s ease-in-out infinite;
+  }
+  
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+  
+  .gen-card h1 { 
+    font-family: 'Syne', sans-serif; 
+    font-size: 2rem; 
+    font-weight: 800; 
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, var(--text) 0%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  
+  .gen-card p { 
+    color: var(--text-muted); 
+    margin-bottom: 2rem;
+    font-size: 1rem;
+    font-weight: 500;
+  }
+  
+  .info-row { 
+    display: flex; 
+    justify-content: center; 
+    gap: 3rem; 
+    margin-bottom: 2.5rem;
+    padding: 1rem;
+    background: var(--surface2);
+    border-radius: 20px;
+    border: 1px solid var(--border);
+  }
+  
+  .info-item { 
+    text-align: center; 
+  }
+  
+  .info-item .val { 
+    font-family: 'Syne', sans-serif; 
+    font-size: 1.8rem; 
+    font-weight: 800; 
+    color: var(--accent);
+    line-height: 1.2;
+  }
+  
+  .info-item .lbl { 
+    font-size: 0.8rem; 
+    color: var(--text-muted); 
+    text-transform: uppercase; 
+    letter-spacing: 0.06em; 
+    font-weight: 600;
+  }
+  
+  /* Question selection styles */
+  .selection-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+    padding: 0 0.5rem;
+  }
+  
+  .selection-header h3 {
+    font-family: 'Syne', sans-serif;
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--text);
+  }
+  
+  .selection-stats {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    font-weight: 600;
+    background: var(--surface2);
+    padding: 0.3rem 0.8rem;
+    border-radius: 30px;
+    border: 1px solid var(--border);
+  }
+  
+  .q-select-list { 
+    max-height: 350px; 
+    overflow-y: auto; 
+    text-align: left; 
+    margin-bottom: 1.5rem; 
+    border: 2px solid var(--border); 
+    border-radius: 16px; 
+    background: var(--surface2);
+  }
+  
+  .q-select-item { 
+    display: flex; 
+    align-items: center; 
+    gap: 1rem; 
+    padding: 1rem 1.2rem; 
+    border-bottom: 1px solid var(--border); 
+    font-size: 0.9rem; 
+    cursor: pointer; 
+    transition: all 0.2s ease;
+    color: var(--text);
+  }
+  
+  .q-select-item:last-child { 
+    border-bottom: none; 
+  }
+  
+  .q-select-item:hover { 
+    background: var(--surface); 
+    transform: translateX(4px);
+  }
+  
+  .q-select-item input[type=checkbox] { 
+    width: auto; 
+    accent-color: var(--accent); 
+    transform: scale(1.1);
+    margin-right: 0.3rem;
+  }
+  
+  .q-number {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    height: 28px;
+    background: var(--accent);
+    color: white;
+    border-radius: 20px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0 0.5rem;
+  }
+  
+  .dark .q-number {
+    color: var(--bg);
+  }
+  
+  .sel-all-row { 
+    display: flex; 
+    align-items: center; 
+    gap: 0.8rem; 
+    font-size: 0.9rem; 
+    color: var(--text-muted); 
+    margin-bottom: 1rem; 
+    padding: 0.8rem 1rem;
+    background: var(--surface2);
+    border-radius: 12px;
+    border: 1px solid var(--border);
+    font-weight: 600;
+  }
+  
+  .sel-all-row input[type=checkbox] {
+    accent-color: var(--accent);
+    transform: scale(1.1);
+  }
+  
+  .sel-all-row label {
+    cursor: pointer;
+    color: var(--text);
+    font-weight: 600;
+  }
+  
+  /* Info box */
+  .info-box {
+    background: linear-gradient(135deg, rgba(108, 99, 255, 0.08) 0%, rgba(255, 107, 157, 0.08) 100%);
+    border: 2px solid rgba(108, 99, 255, 0.2);
+    border-radius: 16px;
+    padding: 1.2rem 1.5rem;
+    margin-bottom: 2rem;
+    text-align: left;
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .info-box::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: linear-gradient(135deg, var(--accent), var(--accent2));
+    border-radius: 4px 0 0 4px;
+  }
+  
+  .info-box strong {
+    color: var(--accent);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  
+  .info-box p {
+    margin: 0.5rem 0 0;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    line-height: 1.6;
+  }
+  
+  .info-steps {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 0.5rem;
+    margin-top: 0.8rem;
+  }
+  
+  .step {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 30px;
+    padding: 0.3rem 0.8rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    text-align: center;
+    font-weight: 500;
+  }
+  
+  .step.active {
+    background: var(--accent);
+    color: white;
+    border-color: var(--accent);
+  }
+  
+  /* Alert styles */
+  .alert-warning {
+    background: rgba(255, 179, 71, 0.1);
+    border: 2px solid rgba(255, 179, 71, 0.3);
+    color: var(--warn);
+    padding: 1.2rem;
+    border-radius: 16px;
+    font-weight: 600;
+    text-align: left;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
+  
+  .alert-warning a {
+    color: var(--warn);
+    font-weight: 700;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  
+  .alert-warning a:hover {
+    color: var(--accent2);
+  }
+  
+  /* Button enhancements */
+  .action-buttons {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    justify-content: center;
+    margin-top: 1.5rem;
+  }
+  
+  .btn-lg {
+    padding: 1rem 2rem;
+    font-size: 1.1rem;
+  }
+  
+  /* Loading state */
+  .btn-loading {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.8;
+  }
+  
+  .btn-loading::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 2px solid transparent;
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    right: 1rem;
+    top: calc(50% - 10px);
+  }
+  
+  /* Custom scrollbar for question list */
+  .q-select-list::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .q-select-list::-webkit-scrollbar-track {
+    background: var(--surface2);
+    border-radius: 3px;
+  }
+  
+  .q-select-list::-webkit-scrollbar-thumb {
+    background: var(--border-active);
+    border-radius: 3px;
+  }
+  
+  .q-select-list::-webkit-scrollbar-thumb:hover {
+    background: var(--accent);
+  }
+  
+  /* Responsive */
+  @media (max-width: 640px) {
+    .gen-card {
+      padding: 1.5rem;
+    }
+    
+    .info-row {
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+    
+    .action-buttons {
+      flex-direction: column;
+    }
+    
+    .btn-lg {
+      width: 100%;
+    }
+    
+    .info-steps {
+      grid-template-columns: 1fr;
+      gap: 0.3rem;
+    }
+    
+    .q-number {
+      min-width: 32px;
+      font-size: 0.7rem;
+    }
+  }
+  
+  /* Selection counter animation */
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+  }
+  
+  .selection-count {
+    animation: pulse 0.3s ease;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container">
+  <div class="gen-wrap fade-up">
+    <div class="gen-card">
+      <div class="gen-icon">🤖</div>
+      <h1>Generate AI Answers</h1>
+      <p>The AI will analyze your reference documents and generate comprehensive answers with citations</p>
+
+      <div class="info-row">
+        <div class="info-item">
+          <div class="val">{{ questions.count }}</div>
+          <div class="lbl">Questions</div>
+        </div>
+        <div class="info-item">
+          <div class="val">{{ references.count }}</div>
+          <div class="lbl">Reference Documents</div>
+        </div>
+        <div class="info-item">
+          <div class="val">GPT-4</div>
+          <div class="lbl">AI Model</div>
+        </div>
+      </div>
+
+      {% if not references %}
+      <div class="alert-warning">
+        <span style="font-size: 1.5rem;">⚠️</span>
+        <div>
+          <strong>No processed reference documents found.</strong><br>
+          <span style="font-size: 0.85rem;">Upload and process documents before generating answers.</span>
+          <a href="{% url 'project_upload' project.pk %}" style="display: inline-block; margin-left: 0.5rem;">
+            Upload documents →
+          </a>
+        </div>
+      </div>
+      {% else %}
+
+      <form method="post" id="genForm">
+        {% csrf_token %}
+        
+        <div class="selection-header">
+          <h3>Select Questions to Answer</h3>
+          <span class="selection-stats">
+            <span id="selectedCount">{{ questions.count }}</span>/{{ questions.count }} selected
+          </span>
+        </div>
+        
+        <div class="sel-all-row">
+          <input type="checkbox" id="selAll" checked onchange="toggleAll(this)">
+          <label for="selAll">Select all questions</label>
+          <span style="margin-left:auto; font-size:0.8rem;">{{ questions.count }} total</span>
+        </div>
+        
+        <div class="q-select-list">
+          {% for q in questions %}
+          <label class="q-select-item">
+            <input type="checkbox" name="question_ids" value="{{ q.pk }}" checked onchange="updateSelectionCount()">
+            <span class="q-number">Q{{ q.order }}</span>
+            <span style="flex: 1;">{{ q.text|truncatechars:100 }}</span>
+            {% if q.category %}
+            <span class="badge badge-purple" style="margin-left: 0.5rem;">{{ q.category }}</span>
+            {% endif %}
+          </label>
+          {% endfor %}
+        </div>
+
+        <!-- How it works section -->
+        <div class="info-box">
+          <strong>📋 How the AI generates answers</strong>
+          <div class="info-steps">
+            <span class="step">1. Semantic search</span>
+            <span class="step">2. Context retrieval</span>
+            <span class="step">3. Answer generation</span>
+            <span class="step">4. Citation linking</span>
+          </div>
+          <p style="margin-top: 1rem;">
+            For each question, the AI finds the most relevant sections in your documents, 
+            generates accurate answers using GPT-4, and adds inline citations. You can 
+            review and edit all answers before finalizing.
+          </p>
+        </div>
+
+        <div class="action-buttons">
+          <button type="submit" class="btn btn-primary btn-lg group" id="genBtn">
+            <span class="flex items-center gap-2">
+              <span>🚀</span>
+              <span>Generate Answers</span>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" class="transition-transform group-hover:translate-x-1">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"/>
+              </svg>
+            </span>
+          </button>
+          <a href="{% url 'project_upload' project.pk %}" class="btn btn-secondary btn-lg">
+            <span class="flex items-center gap-2">
+              <span>←</span>
+              <span>Back to Upload</span>
+            </span>
+          </a>
+        </div>
+      </form>
+
+      <!-- Generation tips -->
+      <div style="margin-top: 2rem; padding: 1rem; border-top: 1px solid var(--border);">
+        <div style="display: flex; gap: 1.5rem; justify-content: center; flex-wrap: wrap;">
+          <span class="flex items-center gap-1 text-muted">
+            <span>⏱️</span>
+            <span class="text-xs">~5-10 seconds per question</span>
+          </span>
+          <span class="flex items-center gap-1 text-muted">
+            <span>📚</span>
+            <span class="text-xs">Uses {{ references.count }} reference documents</span>
+          </span>
+          <span class="flex items-center gap-1 text-muted">
+            <span>✏️</span>
+            <span class="text-xs">Editable after generation</span>
+          </span>
+        </div>
+      </div>
+
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<script>
+// Toggle all questions
+function toggleAll(cb) {
+  document.querySelectorAll('input[name=question_ids]').forEach(el => {
+    el.checked = cb.checked;
+  });
+  updateSelectionCount();
+}
+
+// Update selected count
+function updateSelectionCount() {
+  const checkboxes = document.querySelectorAll('input[name=question_ids]');
+  const checkedCount = Array.from(checkboxes).filter(cb => cb.checked).length;
+  const totalCount = checkboxes.length;
+  const countSpan = document.getElementById('selectedCount');
+  const selectAll = document.getElementById('selAll');
+  
+  if (countSpan) {
+    countSpan.textContent = checkedCount;
+    countSpan.classList.add('selection-count');
+    setTimeout(() => countSpan.classList.remove('selection-count'), 300);
+  }
+  
+  // Update select all checkbox
+  if (selectAll) {
+    selectAll.checked = checkedCount === totalCount;
+    selectAll.indeterminate = checkedCount > 0 && checkedCount < totalCount;
+  }
+}
+
+// Form submission with loading state
+document.getElementById('genForm')?.addEventListener('submit', function(e) {
+  const btn = document.getElementById('genBtn');
+  const checkboxes = document.querySelectorAll('input[name=question_ids]:checked');
+  
+  if (checkboxes.length === 0) {
+    e.preventDefault();
+    alert('Please select at least one question to generate answers.');
+    return;
+  }
+  
+  btn.classList.add('btn-loading');
+  btn.disabled = true;
+  
+  const originalContent = btn.innerHTML;
+  btn.innerHTML = `
+    <span class="flex items-center gap-2">
+      <span class="spin">⚙️</span>
+      <span>Generating (${checkboxes.length} questions)...</span>
+    </span>
+  `;
+});
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', function() {
+  updateSelectionCount();
+  
+  // Add keyboard shortcut (Ctrl/Cmd + A) for select all
+  document.addEventListener('keydown', function(e) {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'a') {
+      const target = e.target;
+      if (!target.matches('input, textarea')) {
+        e.preventDefault();
+        const selectAll = document.getElementById('selAll');
+        if (selectAll) {
+          selectAll.checked = !selectAll.checked;
+          toggleAll(selectAll);
+        }
+      }
+    }
+  });
+});
+</script>
+
+<!-- Add spin animation if not already in base -->
+<style>
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+</style>
+{% endblock %}

@@ -1,0 +1,6 @@
+Django
+openai
+PyPDF2
+python-docx
+tiktoken
+numpy
