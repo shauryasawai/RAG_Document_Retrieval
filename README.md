@@ -1,19 +1,19 @@
-### DocuRAG — AI-Powered Questionnaire Answering SaaS
+# DocuRAG — AI-Powered Questionnaire Answering SaaS
 
 ## Assignment Context
 
-# For this implementation I created a fictional company and dataset to simulate a real questionnaire workflow.
+For this implementation I created a fictional company and dataset to simulate a real questionnaire workflow.
 
-# Industry: SaaS Security & Compliance
+Industry: SaaS Security & Compliance
 
-# Company:
+Company:
 SecureLayer Systems is a fictional SaaS company that provides cloud-based infrastructure monitoring and automated compliance tools for enterprises. Their platform helps organizations monitor system health, manage audit logs, and meet regulatory requirements.
 
-## To simulate a realistic scenario I created (Testing_DOCS):
+To simulate a realistic scenario I created (Testing_DOCS):
 
-# A questionnaire containing 30 questions.
+A questionnaire containing 30 questions.
 
-# 1 internal reference documents describing policies, infrastructure, and compliance practices.
+1 internal reference documents describing policies, infrastructure, and compliance practices.
 
 These documents act as the source of truth used by the system to generate answers.
 A production-ready Django SaaS that uses RAG (Retrieval-Augmented Generation) to automatically answer questionnaires using your reference documents — with full citations.
@@ -119,6 +119,6 @@ RAG_Document_Retrieval/
 
 ## About Me
 
-# Hi, I’m Shauryaman Sawai, an engineering student at NIT Rourkela with experience in full-stack development, data analytics, and applied AI Systems and AI Automations.
+Hi, I’m Shauryaman Sawai, an engineering student at NIT Rourkela with experience in full-stack development, data analytics, and applied AI Systems and AI Automations.
 
-# I enjoy building practical systems where machine learning and software engineering solve real workflow problems. This project reflects my interest in building AI tools that are structured, reliable, and usable in real operational settings.
+I enjoy building practical systems where machine learning and software engineering solve real workflow problems. This project reflects my interest in building AI tools that are structured, reliable, and usable in real operational settings.
