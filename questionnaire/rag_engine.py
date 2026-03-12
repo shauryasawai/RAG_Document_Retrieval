@@ -482,21 +482,25 @@ def chunk_text(text: str, chunk_size: int = 600, overlap: int = 100) -> List[str
     return [c for c in chunks if len(c.strip()) > 50]
 
 
-def get_embeddings(texts: List[str], api_key: str) -> List[List[float]]:
-    """Get embeddings using OpenAI API"""
+def get_embeddings(texts: List[str], api_key: str) -> tuple:
+    """
+    Returns (embeddings_list, total_tokens_used).
+    The second return value lets callers track token usage.
+    """
     import urllib.request
     import urllib.error
-    
+
     embeddings = []
+    total_tokens = 0
     batch_size = 20
-    
+
     for i in range(0, len(texts), batch_size):
         batch = texts[i:i + batch_size]
         payload = json.dumps({
             'model': 'text-embedding-3-small',
             'input': batch
         }).encode('utf-8')
-        
+
         req = urllib.request.Request(
             'https://api.openai.com/v1/embeddings',
             data=payload,
@@ -510,13 +514,13 @@ def get_embeddings(texts: List[str], api_key: str) -> List[List[float]]:
                 data = json.loads(resp.read())
                 for item in data['data']:
                     embeddings.append(item['embedding'])
+                total_tokens += data.get('usage', {}).get('total_tokens', 0)
         except Exception as e:
             print(f"Embedding error: {e}")
-            # Return zero vectors as fallback
             for _ in batch:
                 embeddings.append([0.0] * 1536)
-    
-    return embeddings
+
+    return embeddings, total_tokens
 
 
 def cosine_similarity(vec1: List[float], vec2: List[float]) -> float:
@@ -606,7 +610,7 @@ Instructions: Answer the question above using only the source excerpts. Add [Sou
         'temperature': 0.1,
         'max_tokens': 800
     }).encode('utf-8')
-    
+
     req = urllib.request.Request(
         'https://api.openai.com/v1/chat/completions',
         data=payload,
@@ -615,20 +619,19 @@ Instructions: Answer the question above using only the source excerpts. Add [Sou
             'Content-Type': 'application/json'
         }
     )
-    
+
     try:
         with urllib.request.urlopen(req, timeout=60) as resp:
             data = json.loads(resp.read())
             full_answer = data['choices'][0]['message']['content']
-            
-            # Extract confidence score
+            usage = data.get('usage', {})
+
             confidence = 0.5
             conf_match = re.search(r'CONFIDENCE:\s*\[?(\d+)\]?', full_answer, re.IGNORECASE)
             if conf_match:
                 confidence = int(conf_match.group(1)) / 100
                 full_answer = full_answer[:conf_match.start()].strip()
-            
-            # Build citations list
+
             citations = []
             for i, (score, chunk_id, chunk_text, doc_name, page_num) in enumerate(relevant_chunks):
                 if f'[Source {i+1}]' in full_answer:
@@ -640,18 +643,23 @@ Instructions: Answer the question above using only the source excerpts. Add [Sou
                         'relevance_score': round(score, 3),
                         'excerpt': chunk_text[:200] + '...' if len(chunk_text) > 200 else chunk_text
                     })
-            
+
             return {
                 'answer': full_answer,
                 'citations': citations,
-                'confidence': confidence
+                'confidence': confidence,
+                'usage': {
+                    'prompt_tokens': usage.get('prompt_tokens', 0),
+                    'completion_tokens': usage.get('completion_tokens', 0)
+                }
             }
     except Exception as e:
         print(f"Generation error: {e}")
         return {
             'answer': f'Error generating answer: {str(e)}',
             'citations': [],
-            'confidence': 0.0
+            'confidence': 0.0,
+            'usage': {'prompt_tokens': 0, 'completion_tokens': 0}
         }
 
 

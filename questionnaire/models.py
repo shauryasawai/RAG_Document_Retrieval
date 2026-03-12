@@ -97,3 +97,24 @@ class Answer(models.Model):
 
     def __str__(self):
         return f"Answer to Q{self.question.order}"
+    
+
+class TokenUsage(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='token_usage')
+    total_tokens_used = models.IntegerField(default=0)
+    total_cost_usd = models.DecimalField(max_digits=8, decimal_places=4, default=0)
+    max_token_limit = models.IntegerField(default=500_000)  # 500k tokens default
+    last_updated = models.DateTimeField(auto_now=True)
+
+    def is_within_limit(self):
+        return self.total_tokens_used < self.max_token_limit
+
+    def add_usage(self, prompt_tokens, completion_tokens):
+        self.total_tokens_used += prompt_tokens + completion_tokens
+        # gpt-4o-mini pricing: $0.15/1M input, $0.60/1M output
+        cost = (prompt_tokens * 0.00000015) + (completion_tokens * 0.0000006)
+        self.total_cost_usd += cost
+        self.save()
+
+    def __str__(self):
+        return f"{self.user.username}: {self.total_tokens_used:,} tokens used"

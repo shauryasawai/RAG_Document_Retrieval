@@ -1,5 +1,6 @@
 from django.contrib import admin
-from .models import Project, ReferenceDocument, DocumentChunk, Question, Answer
+from .models import Project, ReferenceDocument, DocumentChunk, Question, Answer, TokenUsage
+
 
 @admin.register(Project)
 class ProjectAdmin(admin.ModelAdmin):
@@ -16,3 +17,10 @@ class QuestionAdmin(admin.ModelAdmin):
 @admin.register(Answer)
 class AnswerAdmin(admin.ModelAdmin):
     list_display = ['question', 'confidence_score', 'is_edited', 'generated_at']
+
+
+@admin.register(TokenUsage)
+class TokenUsageAdmin(admin.ModelAdmin):
+    list_display = ['user', 'total_tokens_used', 'max_token_limit', 'total_cost_usd', 'last_updated']
+    list_editable = ['max_token_limit']
+    search_fields = ['user__username']

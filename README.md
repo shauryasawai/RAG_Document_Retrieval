@@ -39,14 +39,20 @@ pip install -r requirements.txt
 # 2. Set your OpenAI API key (or add it in your profile after login)
 export OPENAI_API_KEY=sk-...
 
-# 3. Run migrations
+# 3. Make migrations
+python manage.py makemigrations
+
+# 4. Run migrations
 python manage.py migrate
 
-# 4. Start server
+# 5. Collecting static_files
+python manage.py collectstatic
+
+# 6. Start server
 python manage.py runserver
 
-# 5. Visit http://localhost:8000
-# Demo credentials: demo / demo1234
+# 7. Visit http://localhost:8000
+Demo credentials: Shauryaman / Shaurya123..
 ```
 
 ## Architecture

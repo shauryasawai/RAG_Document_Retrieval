@@ -9,11 +9,22 @@ from django.utils import timezone
 from django.conf import settings
 from django.db.models import Avg
 
-from .models import Project, ReferenceDocument, DocumentChunk, Question, Answer
+from .models import Project, ReferenceDocument, DocumentChunk, Question, Answer, TokenUsage
 from base.models import UserProfile
 from . import rag_engine
 from . import exporter
+from django.contrib.auth.models import User
 
+MAX_USERS = 3
+
+def _check_single_user_limit(request):
+    """Return an error JsonResponse if user limit is reached, else None."""
+    if User.objects.count() > MAX_USERS:
+        return JsonResponse(
+            {'error': f'User limit of {MAX_USERS} reached. Contact the administrator.'},
+            status=403
+        )
+    return None
 
 def get_api_key(user):
     try:
@@ -126,15 +137,23 @@ def project_upload(request, pk):
         'questions': questions,
     })
 
+def _get_or_create_usage(user) -> "TokenUsage":
+    usage, _ = TokenUsage.objects.get_or_create(user=user)
+    return usage
 
-def process_reference_doc(ref_pk, api_key):
-    """Background processing of reference documents"""
+
+def _check_token_limit(user):
+    """Return (within_limit: bool, usage: TokenUsage)."""
+    usage = _get_or_create_usage(user)
+    return usage.is_within_limit(), usage
+
+def process_reference_doc(ref_pk, api_key, user_pk=None):
+    """Background processing of reference documents — now tracks token usage."""
     try:
         ref = ReferenceDocument.objects.get(pk=ref_pk)
         file_path = ref.file.path
         ext = ref.file_type.lower()
-        
-        # Extract text
+
         if ext == 'pdf':
             pages = rag_engine.extract_text_from_pdf(file_path)
             raw_items = [(p['text'], None, p['page']) for p in pages]
@@ -144,28 +163,33 @@ def process_reference_doc(ref_pk, api_key):
         else:
             sections = rag_engine.extract_text_from_txt(file_path)
             raw_items = [(s['text'], s.get('section', ''), None) for s in sections]
-        
-        # Chunk text
+
         all_chunks = []
         for text, section, page in raw_items:
             chunks = rag_engine.chunk_text(text)
             for chunk in chunks:
                 all_chunks.append((chunk, section or '', page))
-        
+
         if not all_chunks:
             ref.processed = True
             ref.save()
             return
-        
-        # Get embeddings
+
         texts = [c[0] for c in all_chunks]
-        embeddings = []
+        embeddings = [[0.0] * 1536] * len(texts)
+        embed_tokens = 0
+
         if api_key:
-            embeddings = rag_engine.get_embeddings(texts, api_key)
-        else:
-            embeddings = [[0.0] * 1536] * len(texts)
-        
-        # Save chunks
+            embeddings, embed_tokens = rag_engine.get_embeddings(texts, api_key)
+
+        # Track embedding token usage
+        if user_pk and embed_tokens:
+            try:
+                usage = _get_or_create_usage(User.objects.get(pk=user_pk))
+                usage.add_usage(embed_tokens, 0)
+            except Exception as e:
+                print(f"Token tracking error: {e}")
+
         for i, (chunk_text, section, page) in enumerate(all_chunks):
             dc = DocumentChunk(
                 document=ref,
@@ -177,11 +201,11 @@ def process_reference_doc(ref_pk, api_key):
             if i < len(embeddings):
                 dc.set_embedding(embeddings[i])
             dc.save()
-        
+
         ref.chunk_count = len(all_chunks)
         ref.processed = True
         ref.save()
-        print(f"Processed {ref.name}: {len(all_chunks)} chunks")
+        print(f"Processed {ref.name}: {len(all_chunks)} chunks, {embed_tokens} embed tokens")
     except Exception as e:
         print(f"Error processing doc {ref_pk}: {e}")
 
@@ -189,70 +213,116 @@ def process_reference_doc(ref_pk, api_key):
 @login_required
 def project_generate(request, pk):
     project = get_object_or_404(Project, pk=pk, user=request.user)
-    
+
     if request.method == 'POST':
+        # Enforce token limit
+        within_limit, usage = _check_token_limit(request.user)
+        if not within_limit:
+            messages.error(
+                request,
+                f'Token limit reached ({usage.total_tokens_used:,} / {usage.max_token_limit:,} tokens). '
+                f'Contact your administrator to increase the limit.'
+            )
+            return redirect('project_review', pk=pk)
+
         project.status = 'processing'
         project.save()
-        
+
         api_key = get_api_key(request.user)
         question_ids = request.POST.getlist('question_ids')
-        
+
         threading.Thread(
             target=generate_answers_task,
-            args=(project.pk, api_key, question_ids)
+            args=(project.pk, api_key, question_ids, request.user.pk)
         ).start()
-        
+
         messages.success(request, 'AI is generating answers. This may take a few minutes...')
         return redirect('project_review', pk=pk)
-    
+
     questions = project.questions.all()
     refs = project.references.filter(processed=True)
+
+    # Pass usage info to template
+    _, usage = _check_token_limit(request.user)
     return render(request, 'questionnaire/generate.html', {
         'project': project,
         'questions': questions,
         'references': refs,
+        'token_usage': usage,
     })
 
 
-def generate_answers_task(project_pk, api_key, question_ids=None):
-    """Background task to generate all answers"""
+def generate_answers_task(project_pk, api_key, question_ids=None, user_pk=None):
+    """Background task — generates answers and tracks token usage."""
     try:
         project = Project.objects.get(pk=project_pk)
-        
-        # Load all embeddings into memory
+
+        # Token limit check before starting
+        if user_pk:
+            try:
+                user = User.objects.get(pk=user_pk)
+                within_limit, usage = _check_token_limit(user)
+                if not within_limit:
+                    print(f"Token limit reached for user {user_pk}. Aborting generation.")
+                    project.status = 'review'
+                    project.save()
+                    return
+            except Exception as e:
+                print(f"Token limit check error: {e}")
+
         chunks_data = []
         for ref in project.references.filter(processed=True):
             for chunk in ref.chunks.all():
                 emb = chunk.get_embedding()
                 chunks_data.append((chunk.pk, chunk.content, emb, ref.name, chunk.page_number))
-        
+
         if not chunks_data:
             project.status = 'review'
             project.save()
             return
-        
+
         questions = project.questions.all()
         if question_ids:
             questions = questions.filter(pk__in=question_ids)
-        
+
         answered = 0
         total_confidence = 0.0
-        
+
         for question in questions:
+            # Re-check limit before each question
+            if user_pk:
+                try:
+                    user = User.objects.get(pk=user_pk)
+                    within_limit, usage = _check_token_limit(user)
+                    if not within_limit:
+                        print(f"Token limit hit mid-generation at question {question.pk}. Stopping.")
+                        break
+                except Exception:
+                    pass
+
             question.status = 'generating'
             question.save()
-            
-            # Retrieve relevant chunks
+
             relevant = rag_engine.retrieve_relevant_chunks(
                 question.text, chunks_data, api_key, top_k=5
             )
-            
-            # Generate answer
+
             result = rag_engine.generate_answer(
                 question.text, relevant, api_key, project.name
             )
-            
-            # Save answer
+
+            # Track tokens from this answer
+            if user_pk:
+                try:
+                    usage = _get_or_create_usage(User.objects.get(pk=user_pk))
+                    u = result.get('usage', {})
+                    usage.add_usage(
+                        u.get('prompt_tokens', 0),
+                        u.get('completion_tokens', 0)
+                    )
+                except Exception as e:
+                    print(f"Token tracking error: {e}")
+
             Answer.objects.update_or_create(
                 question=question,
                 defaults={
@@ -261,22 +331,23 @@ def generate_answers_task(project_pk, api_key, question_ids=None):
                     'confidence_score': result['confidence'],
                 }
             )
-            
-            # Link relevant chunks
+
             ans = question.answer
             chunk_ids = [r[1] for r in relevant if r[0] > 0.3]
             ans.relevant_chunks.set(DocumentChunk.objects.filter(pk__in=chunk_ids))
-            
+
             question.status = 'answered'
             question.save()
             answered += 1
             total_confidence += result['confidence']
-        
-        project.answered_questions = project.questions.filter(status__in=['answered', 'reviewed']).count()
+
+        project.answered_questions = project.questions.filter(
+            status__in=['answered', 'reviewed']
+        ).count()
         project.confidence_score = (total_confidence / answered) if answered > 0 else 0
         project.status = 'review'
         project.save()
-        
+
     except Exception as e:
         print(f"Generation task error: {e}")
         try:
@@ -418,3 +489,16 @@ def reprocess_documents(request, pk):
     import threading
     threading.Thread(target=_reprocess, daemon=True).start()
     return JsonResponse({'status': 'reprocessing'})
+
+
+@login_required
+def token_usage_status(request):
+    """AJAX or page: returns current token usage for the logged-in user."""
+    usage = _get_or_create_usage(request.user)
+    return JsonResponse({
+        'tokens_used': usage.total_tokens_used,
+        'token_limit': usage.max_token_limit,
+        'cost_usd': float(usage.total_cost_usd),
+        'within_limit': usage.is_within_limit(),
+        'percent_used': round(usage.total_tokens_used / usage.max_token_limit * 100, 1)
+    })
