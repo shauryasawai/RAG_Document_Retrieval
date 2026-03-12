@@ -52,7 +52,7 @@ python manage.py collectstatic
 python manage.py runserver
 
 # 7. Visit http://localhost:8000
-Demo credentials: Shauryaman / Shaurya123..
+Demo credentials: shaurya / sawai
 ```
 
 ## Architecture

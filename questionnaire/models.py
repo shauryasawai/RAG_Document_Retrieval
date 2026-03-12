@@ -1,6 +1,7 @@
 from django.db import models
 from django.contrib.auth.models import User
 import json
+from decimal import Decimal
 
 class Project(models.Model):
     STATUS_CHOICES = [
@@ -102,7 +103,7 @@ class Answer(models.Model):
 class TokenUsage(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='token_usage')
     total_tokens_used = models.IntegerField(default=0)
-    total_cost_usd = models.DecimalField(max_digits=8, decimal_places=4, default=0)
+    total_cost_usd = models.DecimalField(max_digits=8, decimal_places=4, default=Decimal('0'))
     max_token_limit = models.IntegerField(default=500_000)  # 500k tokens default
     last_updated = models.DateTimeField(auto_now=True)
 
