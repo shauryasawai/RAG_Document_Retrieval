@@ -1,4 +1,4 @@
-# DocuRAG — AI-Powered Questionnaire Answering SaaS
+# DocuRAG (AI-Powered Questionnaire Answering SaaS)
 
 ## Assignment Context
 
